@@ -1,0 +1,1468 @@
+/* ========================================== */
+/* [Users] Required script data to fill in    */
+/* ========================================== */
+const USER_ID = "PasteYourUserIdHere";
+const API_TOKEN = "PasteYourApiTokenHere"; // Do not share this to anyone
+const WEB_APP_URL = "PasteGeneratedWebAppUrlHere";
+
+/* ========================================== */
+/* [Users] Required customizations to fill in */
+/* ========================================== */
+
+/* ========================================== */
+/* [Users] Optional customizations to fill in */
+/* ========================================== */
+const NOTIFICATION_CHANCE = 0.25;
+
+/* ========================================== */
+/* [Users] Do not edit code below this line   */
+/* ========================================== */
+const AUTHOR_ID = "01daa187-ff5e-46aa-ac3f-d4c529a8c012";
+const SCRIPT_NAME = "Warrior Subclasses";
+const HEADERS = {
+  "x-client" : AUTHOR_ID + "-" + SCRIPT_NAME,
+  "x-api-user" : USER_ID,
+  "x-api-key" : API_TOKEN,
+}
+
+const scriptProperties = PropertiesService.getScriptProperties(); // Constants can have properties changed
+
+// Rate Limit Check
+const RETRY_AFTER_OFFSET_MS = 1000;
+
+const FAIL_RETRY_AFTER_WAIT_MSG_PART_1 = "**ERROR: Script Failed. Retry later.**  \n\n"
+    + "**Script Name**: " + SCRIPT_NAME + "  \n"
+    + "**Reason**: Number of server requests needed to complete script operation will exceed [rate limit](https://habitica.fandom.com/wiki/User_blog:LadyAlys/Rate_Limiting_(Intentional_Slow-Downs)_in_Some_Third-Party_Tools)  \n"
+    + "**Recommendation**: Please wait for ";
+const FAIL_RETRY_AFTER_WAIT_MSG_PART_2 = " second(s), then try again"
+
+const FAIL_RETRY_NOW_MSG = "**ERROR: Script Failed. Retry now.**  \n\n"
+    + "**Script Name**: " + SCRIPT_NAME + "  \n"
+    + "**Reason**: Exceeded [rate limit](https://habitica.fandom.com/wiki/User_blog:LadyAlys/Rate_Limiting_(Intentional_Slow-Downs)_in_Some_Third-Party_Tools)  \n"
+    + "**Recommendation**: Please avoid manually triggering scripts too quickly, or triggering a different script while another one is not yet finished running. By the time you receive this message, it should now be okay to manually trigger scripts again.";
+
+var scriptLocked = Number(scriptProperties.getProperty("scriptLocked"));
+
+// Subclass
+const LVL_FOR_SUBCLASS = 60.0;
+
+const SUBCLASS_ABILITY_CON_MAX = 250.0;
+const SUBCLASS_ABILITY_CON_DIVISOR = 500.0;
+const SUBCLASS_ABILITY_BASE_HP_COST = 10.0;
+const SUBCLASS_ABILITY_TOTAL_HP_PAID_MAX = 50.0;
+const HEALTH_FOOTNOTE = "\n\n*Cost goes down to " + (SUBCLASS_ABILITY_BASE_HP_COST * (1 - (SUBCLASS_ABILITY_CON_MAX / SUBCLASS_ABILITY_CON_DIVISOR))) + " Health at " + SUBCLASS_ABILITY_CON_MAX + " CON. Maximum of " + SUBCLASS_ABILITY_TOTAL_HP_PAID_MAX + " Health used per day.";
+
+const MAX_HP_FAIL_NOTES = "Already used max Health for this ability today. Try again after you [Cron](https://habitica.fandom.com/wiki/Cron).";
+const NO_HP_FAIL_NOTES = "Not enough Health to use ability.";
+const NO_MP_FAIL_NOTES = "Not enough Mana to use ability.";
+
+const SCRIPT_LINK = "https://habitica.fandom.com/wiki/Google_Apps_Script#Warrior_Subclasses";
+
+const UPDATE_MSG_BUTTON_TEXT = "## **Update Message**";
+const UPDATE_MSG_BUTTON_ALIAS = "UPDATE_MSG_BUTTON_ALIAS";
+const UPDATE_MSG_BUTTON_NOTES = "Click once on the Gold icon of the old man below to talk. Then click on the Gold icon of this Update Message button (or click on the [Sync](https://habitica.fandom.com/wiki/Sync) button above) to see what he says.";
+
+const SUBCLASS_WARRIOR_1_ABILITY_DICE_NUMBER = 2;
+const SUBCLASS_WARRIOR_1_ABILITY_DICE_TYPE = 10.0;
+const SUBCLASS_WARRIOR_1_ABILITY_STAT_REWARD = "Mana";
+
+const SUBCLASS_WARRIOR_1_NAME = "Berserker";
+const SUBCLASS_WARRIOR_1_QUOTE = "The one who rushes into the battle, regardless of the dangers ahead.";
+const SUBCLASS_WARRIOR_1_ABILITY = "Pay " + SUBCLASS_ABILITY_BASE_HP_COST / 2 + "-" + SUBCLASS_ABILITY_BASE_HP_COST + " Health* to gain up to " + SUBCLASS_WARRIOR_1_ABILITY_DICE_NUMBER * SUBCLASS_WARRIOR_1_ABILITY_DICE_TYPE + " " + SUBCLASS_WARRIOR_1_ABILITY_STAT_REWARD + ".";
+const SUBCLASS_WARRIOR_1_TEXT = "## **" + SUBCLASS_WARRIOR_1_NAME + '**  \n_"' + SUBCLASS_WARRIOR_1_QUOTE + '"_';
+const SUBCLASS_WARRIOR_1_ALIAS = "SUBCLASS_WARRIOR_1_ALIAS";
+const SUBCLASS_WARRIOR_1_NOTES = SUBCLASS_WARRIOR_1_ABILITY + HEALTH_FOOTNOTE;
+
+const SUBCLASS_WARRIOR_1_ABILITY_CRON_COUNT_KEY = "SUBCLASS_WARRIOR_1_ABILITY_CRON_COUNT_KEY";
+const SUBCLASS_WARRIOR_1_ABILITY_TOTAL_HP_PAID_KEY = "SUBCLASS_WARRIOR_1_ABILITY_TOTAL_HP_PAID_KEY";
+const SUBCLASS_WARRIOR_1_ABILITY_REWARD_MSG_1_START = " uses their ";
+const SUBCLASS_WARRIOR_1_ABILITY_REWARD_MSG_1_END = " ability and gains ";
+const SUBCLASS_WARRIOR_1_ABILITY_REWARD_MSG_2_START = " in a ";
+const SUBCLASS_WARRIOR_1_ABILITY_REWARD_MSG_2_END = " rage gains ";
+const SUBCLASS_WARRIOR_1_ABILITY_REWARD_MSG_3_START = " rages on as a ";
+const SUBCLASS_WARRIOR_1_ABILITY_REWARD_MSG_3_END = " and gains ";
+
+const SUBCLASS_WARRIOR_2_ABILITY_1_NAME = "Valorous Presence";
+const SUBCLASS_WARRIOR_2_ABILITY_2_NAME = "Intimidating Gaze";
+const SUBCLASS_WARRIOR_2_ABILITY_CHANCE_PERCENT = 25.0;
+
+const SUBCLASS_WARRIOR_2_NAME = "Defender";
+const SUBCLASS_WARRIOR_2_QUOTE = "The valiant protector of righteousness.";
+const SUBCLASS_WARRIOR_2_ABILITY = "Use the " + SUBCLASS_WARRIOR_2_NAME + "'s versions of " + SUBCLASS_WARRIOR_2_ABILITY_1_NAME + " or " + SUBCLASS_WARRIOR_2_ABILITY_2_NAME + " for " + SUBCLASS_WARRIOR_2_ABILITY_CHANCE_PERCENT + "% chance to triple-cast the skill (2nd & 3rd free)";
+const SUBCLASS_WARRIOR_2_TEXT = "## **" + SUBCLASS_WARRIOR_2_NAME + '**  \n_"' + SUBCLASS_WARRIOR_2_QUOTE + '"_';
+const SUBCLASS_WARRIOR_2_ALIAS = "SUBCLASS_WARRIOR_2_ALIAS";
+const SUBCLASS_WARRIOR_2_NOTES = SUBCLASS_WARRIOR_2_ABILITY;
+const SUBCLASS_WARRIOR_2_ABILITY_MSG = 'Please use the buttons called "' + SUBCLASS_WARRIOR_2_NAME + "'s" + ' Presence" and "' + SUBCLASS_WARRIOR_2_NAME + "'s" + ' Gaze"';
+
+const SUBCLASS_WARRIOR_2_ABILITY_1_TEXT = "### **" + SUBCLASS_WARRIOR_2_NAME + "'s Presence**";
+const SUBCLASS_WARRIOR_2_ABILITY_1_ALIAS = "SUBCLASS_WARRIOR_2_ABILITY_1_ALIAS";
+const SUBCLASS_WARRIOR_2_ABILITY_1_NOTES = SUBCLASS_WARRIOR_2_NAME + "'s version of " + SUBCLASS_WARRIOR_2_ABILITY_1_NAME;
+const SUBCLASS_WARRIOR_2_ABILITY_1_ID = "valorousPresence";
+const SUBCLASS_WARRIOR_2_ABILITY_1_BASE_MP_COST = 20.0;
+const SUBCLASS_WARRIOR_2_ABILITY_1_DICE_TYPE = 20.0;
+const SUBCLASS_WARRIOR_2_ABILITY_1_REWARD_MSG_1_START = " uses their ";
+const SUBCLASS_WARRIOR_2_ABILITY_1_REWARD_MSG_1_END = " ability and triple-casts " + SUBCLASS_WARRIOR_2_ABILITY_1_NAME + "!";
+const SUBCLASS_WARRIOR_2_ABILITY_1_REWARD_MSG_2_START = " in a ";
+const SUBCLASS_WARRIOR_2_ABILITY_1_REWARD_MSG_2_END = " boost triple-casts " + SUBCLASS_WARRIOR_2_ABILITY_1_NAME + "!";
+const SUBCLASS_WARRIOR_2_ABILITY_1_REWARD_MSG_3_START = " strengthens the party as a ";
+const SUBCLASS_WARRIOR_2_ABILITY_1_REWARD_MSG_3_END = " and triple-casts " + SUBCLASS_WARRIOR_2_ABILITY_1_NAME + "!";
+
+const SUBCLASS_WARRIOR_2_ABILITY_2_TEXT = "### **" + SUBCLASS_WARRIOR_2_NAME + "'s Gaze**";
+const SUBCLASS_WARRIOR_2_ABILITY_2_ALIAS = "SUBCLASS_WARRIOR_2_ABILITY_2_ALIAS";
+const SUBCLASS_WARRIOR_2_ABILITY_2_NOTES = SUBCLASS_WARRIOR_2_NAME + "'s version of " + SUBCLASS_WARRIOR_2_ABILITY_2_NAME;
+const SUBCLASS_WARRIOR_2_ABILITY_2_ID = "intimidate";
+const SUBCLASS_WARRIOR_2_ABILITY_2_BASE_MP_COST = 15.0;
+const SUBCLASS_WARRIOR_2_ABILITY_2_DICE_TYPE = 20.0;
+const SUBCLASS_WARRIOR_2_ABILITY_2_REWARD_MSG_1_START = " uses their ";
+const SUBCLASS_WARRIOR_2_ABILITY_2_REWARD_MSG_1_END = " ability and triple-casts " + SUBCLASS_WARRIOR_2_ABILITY_2_NAME + "!";
+const SUBCLASS_WARRIOR_2_ABILITY_2_REWARD_MSG_2_START = " in a ";
+const SUBCLASS_WARRIOR_2_ABILITY_2_REWARD_MSG_2_END = " boost triple-casts " + SUBCLASS_WARRIOR_2_ABILITY_2_NAME + "!";
+const SUBCLASS_WARRIOR_2_ABILITY_2_REWARD_MSG_3_START = " strengthens the party as a ";
+const SUBCLASS_WARRIOR_2_ABILITY_2_REWARD_MSG_3_END = " and triple-casts " + SUBCLASS_WARRIOR_2_ABILITY_2_NAME + "!";
+
+const SUBCLASS_WARRIOR_3_ABILITY_DICE_NUMBER = 5;
+const SUBCLASS_WARRIOR_3_ABILITY_DICE_TYPE = 20.0;
+const SUBCLASS_WARRIOR_3_ABILITY_STAT_REWARD = "Gold";
+
+const SUBCLASS_WARRIOR_3_NAME = "Gladiator";
+const SUBCLASS_WARRIOR_3_QUOTE = "Are you not entertained?!";
+const SUBCLASS_WARRIOR_3_ABILITY = "Pay " + SUBCLASS_ABILITY_BASE_HP_COST / 2 + "-" + SUBCLASS_ABILITY_BASE_HP_COST + " Health* to gain up to " + SUBCLASS_WARRIOR_3_ABILITY_DICE_NUMBER * SUBCLASS_WARRIOR_3_ABILITY_DICE_TYPE + " " + SUBCLASS_WARRIOR_3_ABILITY_STAT_REWARD + ".";
+const SUBCLASS_WARRIOR_3_TEXT = "## **" + SUBCLASS_WARRIOR_3_NAME + '**  \n_"' + SUBCLASS_WARRIOR_3_QUOTE + '"_';
+const SUBCLASS_WARRIOR_3_ALIAS = "SUBCLASS_WARRIOR_3_ALIAS";
+const SUBCLASS_WARRIOR_3_NOTES = SUBCLASS_WARRIOR_3_ABILITY + HEALTH_FOOTNOTE;
+
+const SUBCLASS_WARRIOR_3_ABILITY_CRON_COUNT_KEY = "SUBCLASS_WARRIOR_3_ABILITY_CRON_COUNT_KEY";
+const SUBCLASS_WARRIOR_3_ABILITY_TOTAL_HP_PAID_KEY = "SUBCLASS_WARRIOR_3_ABILITY_TOTAL_HP_PAID_KEY";
+const SUBCLASS_WARRIOR_3_ABILITY_REWARD_MSG_1_START = " uses their ";
+const SUBCLASS_WARRIOR_3_ABILITY_REWARD_MSG_1_END = " ability and gains ";
+const SUBCLASS_WARRIOR_3_ABILITY_REWARD_MSG_2_START = " in a ";
+const SUBCLASS_WARRIOR_3_ABILITY_REWARD_MSG_2_END = " competition gains ";
+const SUBCLASS_WARRIOR_3_ABILITY_REWARD_MSG_3_START = " entertains as a ";
+const SUBCLASS_WARRIOR_3_ABILITY_REWARD_MSG_3_END = " and gains ";
+
+const SUBCLASS_WARRIOR_4_ABILITY_LEVEL_DIVIDEND = 480.0;
+
+const SUBCLASS_WARRIOR_4_NAME = "Blademaster";
+const SUBCLASS_WARRIOR_4_QUOTE = "The expert, training night and day to gain new techniques.";
+const SUBCLASS_WARRIOR_4_ABILITY = "Pay " + SUBCLASS_ABILITY_BASE_HP_COST / 2 + "-" + SUBCLASS_ABILITY_BASE_HP_COST + " Health* for a chance to instantly level up (% = " + SUBCLASS_WARRIOR_4_ABILITY_LEVEL_DIVIDEND + "/level. i.e. " + SUBCLASS_WARRIOR_4_ABILITY_LEVEL_DIVIDEND / LVL_FOR_SUBCLASS + "% at level " + LVL_FOR_SUBCLASS + ").";
+const SUBCLASS_WARRIOR_4_TEXT = "## **" + SUBCLASS_WARRIOR_4_NAME + '**  \n_"' + SUBCLASS_WARRIOR_4_QUOTE + '"_';
+const SUBCLASS_WARRIOR_4_ALIAS = "SUBCLASS_WARRIOR_4_ALIAS";
+const SUBCLASS_WARRIOR_4_NOTES = SUBCLASS_WARRIOR_4_ABILITY + HEALTH_FOOTNOTE;
+
+const SUBCLASS_WARRIOR_4_ABILITY_CRON_COUNT_KEY = "SUBCLASS_WARRIOR_4_ABILITY_CRON_COUNT_KEY";
+const SUBCLASS_WARRIOR_4_ABILITY_TOTAL_HP_PAID_KEY = "SUBCLASS_WARRIOR_4_ABILITY_TOTAL_HP_PAID_KEY";
+const SUBCLASS_WARRIOR_4_ABILITY_DICE_NUMBER = 1;
+const SUBCLASS_WARRIOR_4_ABILITY_DICE_TYPE = 1000.0;
+const SUBCLASS_WARRIOR_4_ABILITY_REWARD_MSG_1_START = " gets lucky with their ";
+const SUBCLASS_WARRIOR_4_ABILITY_REWARD_MSG_1_END = " ability and instantly levels up!";
+const SUBCLASS_WARRIOR_4_ABILITY_REWARD_MSG_2_START = " in a ";
+const SUBCLASS_WARRIOR_4_ABILITY_REWARD_MSG_2_END = " eureka moment instantly levels up!";
+const SUBCLASS_WARRIOR_4_ABILITY_REWARD_MSG_3_START = " makes a breakthrough as a ";
+const SUBCLASS_WARRIOR_4_ABILITY_REWARD_MSG_3_END = " and instantly levels up!";
+
+const SUBCLASS_BUTTONS_ALIASES = [SUBCLASS_WARRIOR_1_ALIAS, SUBCLASS_WARRIOR_2_ALIAS, SUBCLASS_WARRIOR_2_ABILITY_1_ALIAS, SUBCLASS_WARRIOR_2_ABILITY_2_ALIAS, SUBCLASS_WARRIOR_3_ALIAS, SUBCLASS_WARRIOR_4_ALIAS];
+
+var user = 0;
+var content = 0;
+var subclassName = "";
+var cronCountKey = "";
+var totalHpPaidKey = "";
+var totalHpPaidMax = 0.0;
+var baseHpCost = 0.0;
+var diceNumber = 0;
+var diceType = 0.0;
+var abilityStatReward = "";
+var message1Start = "";
+var message1End = "";
+var message2Start = "";
+var message2End = "";
+var message3Start = "";
+var message3End = "";
+
+// NPC
+const STATES = {
+  WELCOME: 0,
+  NO_CLASS: 1,
+  BELOW_LVL_60: 2,
+  LVL_60_ABOVE: 3,
+  SUBCLASS_ACTIVE: 4,
+  NON_WARRIOR: 5,
+}
+
+const ANY_TASK_COUNT_MAX = 10;
+
+const WARRIOR_CLASS_STR = "warrior";
+const ROGUE_CLASS_STR = "rogue";
+const MAGE_CLASS_STR = "wizard";
+const HEALER_CLASS_STR = "healer";
+
+const HEADER_3_PREFIX = "### ";
+const WELCOME_MSG = "Hello, adventurer! I see that you’re interested in unlocking new skills to aid you in your quest through life. ";
+const REBORN_NON_WARRIOR_MSG = "Oh, you got reborn, huh? That’s cool. Now you’ll get a chance to choose a Subclass when the time is right. ";
+const REBORN_BELOW_LVL_60_MSG = "Oh, you got reborn, huh? That’s cool. ";
+const REBORN_LVL_60_ABOVE_MSG = "Uhh… didn’t like the choices, eh? Oh well, can’t satisfy everyone. I only have Warrior stuff at the moment though. ";
+const REBORN_SUBCLASS_ACTIVE_MSG = "Ready for new adventures, eh? That’s awesome. ";
+const NO_CLASS_PRE_MSG = "…But it seems like you haven’t even chosen a [class](https://habitica.fandom.com/wiki/Class_System) yet. ";
+const NO_CLASS_MSG = "Once you’ve gained enough experience and have chosen a class come to me again and let’s talk. ";
+const CLASS_SELECT_MSG_PART_1 = "I see that you have chosen to be a ";
+const CLASS_SELECT_MSG_PART_2 = ". Very good choice. ";
+const CHANGE_NON_WARRIOR_MSG = "Oh, didn’t want to be a Warrior? Well, suit yourself. Can’t help you with Subclasses on that though. ";
+const NON_WARRIOR_PRE_MSG = "However, at the moment I only have the good stuff for Warriors. ";
+const NON_WARRIOR_MSG = "For the other classes you can check [this](https://habitica.fandom.com/wiki/Google_Apps_Script#Warrior.2C_Mage.2C_Healer.2C_Rogue_Subclasses) out and see when things are ready. ";
+const CHANGE_WARRIOR_MSG = "Aww, you switched to being a Warrior just for me? That’s so sweet. Haha just messing with you. ";
+const LVL_DOWN_MSG = "Hey, you doing okay? You seemed a bit stronger the last time we talked. ";
+const BELOW_LVL_60_PRE_MSG = "First, I’d like to see your dedication in your chosen class. ";
+const BELOW_LVL_60_MSG = "Once you have gained enough experience come to me again and let’s see what we can do. ";
+const LVL_ABOVE_60_PRE_MSG = "Splendid! You have worked hard and I can see that you’ve got what it takes. So you’re interested in unlocking new skills, eh? ";
+const SUBCLASS_SELECT_MSG = '(On the box above that says, "Add a Reward", type the number of your choice, press enter, then click on the Gold icon of the Update Message button or on the [Sync](https://habitica.fandom.com/wiki/Sync) button)';
+const WARRIOR_SUBCLASSES_MSG = "1. **" + SUBCLASS_WARRIOR_1_NAME + '** _"' + SUBCLASS_WARRIOR_1_QUOTE + '"_  \n' + SUBCLASS_WARRIOR_1_ABILITY + "  \n"
+    + "2. **" + SUBCLASS_WARRIOR_2_NAME + '** _"' + SUBCLASS_WARRIOR_2_QUOTE + '"_  \n' + SUBCLASS_WARRIOR_2_ABILITY + "  \n"
+    + "3. **" + SUBCLASS_WARRIOR_3_NAME + '** _"' + SUBCLASS_WARRIOR_3_QUOTE + '"_  \n' + SUBCLASS_WARRIOR_3_ABILITY + "  \n"
+    + "4. **" + SUBCLASS_WARRIOR_4_NAME + '** _"' + SUBCLASS_WARRIOR_4_QUOTE + '"_  \n' + SUBCLASS_WARRIOR_4_ABILITY + "  \n"
+    + HEALTH_FOOTNOTE + "\n\n" + SUBCLASS_SELECT_MSG;
+const LVL_60_ABOVE_MSG_1 = 'You came to the right person. I have studied these so-called "Subclasses" for quite some time now, experiencing each and every one of them after using the Orb of Rebirth a countless number of times.\n\n(Looks like he has more to say. Click once again on the Gold icon of the old man, then click on the Gold icon of the Update Message button or on the [Sync](https://habitica.fandom.com/wiki/Sync) button)';
+const LVL_60_ABOVE_MSG_2 = "Here and now I can grant one of these Subclasses to be yours. I suggest that you choose wisely, you can only pick one in this lifetime!  \n" + WARRIOR_SUBCLASSES_MSG;
+const SUBCLASS_ACTIVE_PRE_MSG = "Excellent choice! From this day onwards you are now a ";
+const SUBCLASS_ACTIVE_MSG = "May your newfound powers aid you in your quest through life. See you again on your next rebirth! ";
+
+const THE_LOST_CLASSERMASTER_BUTTON_TEXT_AWAKE = "## **The Lost Classermaster** ![Old man in warrior's armor, wizard's hat, healer's rod, and rogue's dagger](https://vignette.wikia.nocookie.net/habitrpg/images/6/6c/The_Lost_Classermaster.png/revision/latest?cb=20200827190223 'Hey, no touching!')";
+const THE_LOST_CLASSERMASTER_BUTTON_TEXT_ASLEEP = "## **The Lost Classermaster** ![Old man in warrior's armor, wizard's hat, healer's rod, and rogue's dagger... but now asleep](https://vignette.wikia.nocookie.net/habitrpg/images/1/11/The_Lost_Classermaster_Asleep.png/revision/latest?cb=20200827190259 'Zzzz... that tickles!')";
+const THE_LOST_CLASSERMASTER_BUTTON_ALIAS = "THE_LOST_CLASSERMASTER_BUTTON_ALIAS";
+const THE_LOST_CLASSERMASTER_BUTTON_NOTES = HEADER_3_PREFIX + WELCOME_MSG;
+
+const ALL_SCRIPT_BUTTONS_ALIASES = [UPDATE_MSG_BUTTON_ALIAS, THE_LOST_CLASSERMASTER_BUTTON_ALIAS, SUBCLASS_WARRIOR_1_ALIAS, SUBCLASS_WARRIOR_2_ALIAS, SUBCLASS_WARRIOR_2_ABILITY_1_ALIAS, SUBCLASS_WARRIOR_2_ABILITY_2_ALIAS, SUBCLASS_WARRIOR_3_ALIAS, SUBCLASS_WARRIOR_4_ALIAS];
+
+var anyTaskCount = Number(scriptProperties.getProperty("anyTaskCount"));
+var state = Number(scriptProperties.getProperty("state"));
+var lastMsgState = Number(scriptProperties.getProperty("lastMsgState"));
+var npcAwake = Number(scriptProperties.getProperty("npcAwake"));
+
+function doOneTimeSetup() {
+  if (!scriptLocked) {
+    // Get response from repeatable function to see remaining requests
+    const response = api_getUserInfo("stats"); // Dummy read just to get number of remaining requests
+    const respHeaders = response.getAllHeaders();
+    const remainingReq = Number(respHeaders["x-ratelimit-remaining"]);
+    const resetDateTime = new Date(respHeaders["x-ratelimit-reset"]);
+    const dateNow = new Date();
+    const retryAfterMs = Math.max(0, resetDateTime - dateNow) + RETRY_AFTER_OFFSET_MS;
+    const retryAfterSec = Math.ceil(retryAfterMs / 1000);
+    
+    // If remaining requests <= 0, lock script, then after delay send retry now message and unlock script
+    if (remainingReq <= 0) {
+      // Lock script
+      scriptLocked = 1;
+      scriptProperties.setProperty("scriptLocked", scriptLocked);
+      
+      // Set trigger to unlock script and send retry now message after a delay
+      ScriptApp.newTrigger("api_sendFailRetryNowMessageAndUnlockScript").timeBased().after(retryAfterMs).create();
+    }
+    // Else check requests needed
+    else {
+      const requestsNeeded = 3;
+
+      // If remaining requests not enough, send message now to retry after waiting
+      if (remainingReq < requestsNeeded) {
+        api_sendPrivateMessage(FAIL_RETRY_AFTER_WAIT_MSG_PART_1 + retryAfterSec + FAIL_RETRY_AFTER_WAIT_MSG_PART_2, USER_ID);
+      }
+      // Else, continue with normal operation
+      else {
+        api_createRewardTasks();
+        apiMult_createWebhookNoDuplicates(SCRIPT_NAME + " Webhook", "taskActivity", {"created" : true, "scored" : true});
+        initScriptProperties();
+      }
+    }
+  }
+}
+
+function doPost(e) {
+  const dataContents = JSON.parse(e.postData.contents);
+  const type = dataContents.type;
+  const task = dataContents.task;
+
+  // If any task was scored, or a non-script task was created
+  if ((type == "scored") || ((type == "created") && !ALL_SCRIPT_BUTTONS_ALIASES.includes(task.alias))) {
+    anyTaskCount++;
+
+    if ((anyTaskCount >= ANY_TASK_COUNT_MAX) || (task.type == "reward")) {
+      anyTaskCount = 0;
+
+      if (!scriptLocked) {
+        // Get response from repeatable function to see remaining requests
+        const response = api_getUserInfo("preferences.disableClasses,stats,items.gear.equipped,profile.name,flags.cronCount");
+        const respHeaders = response.getAllHeaders();
+        const remainingReq = Number(respHeaders["x-ratelimit-remaining"]);
+        const resetDateTime = new Date(respHeaders["x-ratelimit-reset"]);
+        const dateNow = new Date();
+        const retryAfterMs = Math.max(0, resetDateTime - dateNow) + RETRY_AFTER_OFFSET_MS;
+        const retryAfterSec = Math.ceil(retryAfterMs / 1000);
+        
+        // If remaining requests <= 0, lock script, then after delay send retry now message and unlock script
+        if (remainingReq <= 0) {
+          // Lock script
+          scriptLocked = 1;
+          scriptProperties.setProperty("scriptLocked", scriptLocked);
+          
+          // Set trigger to unlock script and send retry now message after a delay
+          ScriptApp.newTrigger("api_sendFailRetryNowMessageAndUnlockScript").timeBased().after(retryAfterMs).create();
+        }
+        // Else check requests needed
+        else {
+          const requestsNeeded = 6;
+          
+          // If remaining requests not enough, send message now to retry after waiting
+          if (remainingReq < requestsNeeded) {
+            api_sendPrivateMessage(FAIL_RETRY_AFTER_WAIT_MSG_PART_1 + retryAfterSec + FAIL_RETRY_AFTER_WAIT_MSG_PART_2, USER_ID);
+          }
+          // Else, continue with normal operation
+          else {
+            const prevState = state;
+            
+            apiMult_doStateTransitions(prevState, task, type); // Max of 4 API calls when leaving SUBCLASS_ACTIVE state. Othwerwise, 0 API calls.
+            apiMult_doStateActions(prevState, task); // Max of 5 API calls when entering SUBCLASS_ACTIVE state. Otherwise, just 2 API calls max.
+            
+            // Save properties that need to be carried over to the next script execution
+            scriptProperties.setProperty("state", state);
+            scriptProperties.setProperty("lastMsgState", lastMsgState);
+            scriptProperties.setProperty("npcAwake", npcAwake);
+            
+            if ((task.type == "reward") && (state == STATES.SUBCLASS_ACTIVE)) {
+              switch (task.alias) {
+                case SUBCLASS_WARRIOR_1_ALIAS:
+                  apiMult_doSubclassWarrior1Action(); // Max of 3 API calls
+                  break;
+                  
+                case SUBCLASS_WARRIOR_2_ALIAS:
+                  apiMult_doSubclassWarrior2Action(); // 2 API calls
+                  break;
+                  
+                case SUBCLASS_WARRIOR_2_ABILITY_1_ALIAS:
+                  apiMult_doSubclassWarrior2Ability1Action(); // Max of 6 API calls
+                  break;
+                  
+                case SUBCLASS_WARRIOR_2_ABILITY_2_ALIAS:
+                  apiMult_doSubclassWarrior2Ability2Action(); // Max of 6 API calls
+                  break;
+                  
+                case SUBCLASS_WARRIOR_3_ALIAS:
+                  apiMult_doSubclassWarrior3Action(); // Max of 3 API calls
+                  break;
+                  
+                case SUBCLASS_WARRIOR_4_ALIAS:
+                  apiMult_doSubclassWarrior4Action(); // Max of 3 API calls
+                  break;
+              }
+            }
+          }
+        }
+      }
+    }
+
+    scriptProperties.setProperty("anyTaskCount", anyTaskCount);
+  }
+
+  return HtmlService.createHtmlOutput();
+}
+
+function api_getUserInfo(userFields) {
+  const params = {
+    "method" : "get",
+    "headers" : HEADERS,
+    "muteHttpExceptions" : true,
+  }
+  
+  var url = "https://habitica.com/api/v3/user";
+  if (userFields != "") {
+    url += "?userFields=" + userFields;
+  }
+
+  const response = UrlFetchApp.fetch(url, params);
+  user = JSON.parse(response).data;
+  return response;
+}
+
+function api_sendFailRetryNowMessageAndUnlockScript() {
+  deleteTriggers("api_sendFailRetryNowMessageAndUnlockScript");
+
+  var remainingReq = 0;
+  var retryAfterMs = 0;
+  
+  while (remainingReq <= 0) {
+    Utilities.sleep(retryAfterMs);
+    
+    var response = api_sendPrivateMessage(FAIL_RETRY_NOW_MSG, USER_ID);
+    var respHeaders = response.getAllHeaders();
+    remainingReq = Number(respHeaders["x-ratelimit-remaining"]);
+    var resetDateTime = new Date(respHeaders["x-ratelimit-reset"]);
+    var dateNow = new Date();
+    retryAfterMs = Math.max(0, resetDateTime - dateNow) + RETRY_AFTER_OFFSET_MS;
+  }
+
+  scriptLocked = 0;
+  scriptProperties.setProperty("scriptLocked", scriptLocked);
+}
+
+function deleteTriggers(functionName) {
+  // Delete triggers to functionName to avoid reaching the maximum number of triggers
+  const triggers = ScriptApp.getProjectTriggers();
+
+  for (var i in triggers) {
+    if (triggers[i].getHandlerFunction() == functionName) {
+      ScriptApp.deleteTrigger(triggers[i])
+    }
+  }
+}
+
+function api_sendPrivateMessage(message, toUserId) {
+  const payload = {
+    "message" : message,
+    "toUserId" : toUserId,
+  }
+  
+  const params = {
+    "method" : "post",
+    "headers" : HEADERS,
+    "contentType" : "application/json",
+    "payload" : JSON.stringify(payload),
+    "muteHttpExceptions" : true,
+  }
+  
+  const url = "https://habitica.com/api/v3/members/send-private-message";
+  return UrlFetchApp.fetch(url, params);
+}
+
+function api_createRewardTasks() {
+  const updateMessageButton = {
+    "text" : UPDATE_MSG_BUTTON_TEXT,
+    "type" : "reward",
+    "alias" : UPDATE_MSG_BUTTON_ALIAS,
+    "notes" : UPDATE_MSG_BUTTON_NOTES,
+  }
+
+  const theLostClassermasterButton = {
+    "text" : THE_LOST_CLASSERMASTER_BUTTON_TEXT_AWAKE,
+    "type" : "reward",
+    "alias" : THE_LOST_CLASSERMASTER_BUTTON_ALIAS,
+    "notes" : THE_LOST_CLASSERMASTER_BUTTON_NOTES,
+  }
+
+  const params = {
+    "method" : "post",
+    "headers" : HEADERS,
+    "contentType" : "application/json",
+    "payload" : JSON.stringify([theLostClassermasterButton, updateMessageButton]), // Rightmost button goes on top
+    "muteHttpExceptions" : true,
+  }
+
+  const url = "https://habitica.com/api/v3/tasks/user";
+  return UrlFetchApp.fetch(url, params);
+}
+
+function apiMult_createWebhookNoDuplicates(label, type, options) {
+  const response = api_getWebhooks();
+  const webhooks = JSON.parse(response).data;
+  var duplicateExists = 0;
+
+  for (var i in webhooks) {
+    if (webhooks[i].label == label) {
+      duplicateExists = 1;
+    }
+  }
+  // If webhook to be created doesn't exist yet
+  if (!duplicateExists) {
+    api_createWebhook(label, type, options);
+  }
+}
+
+function api_getWebhooks() {
+  const params = {
+    "method" : "get",
+    "headers" : HEADERS,
+    "muteHttpExceptions" : true,
+  }
+
+  const url = "https://habitica.com/api/v3/user/webhook";
+  return UrlFetchApp.fetch(url, params);
+}
+
+function api_createWebhook(label, type, options) {
+  const payload = {
+    "url" : WEB_APP_URL,
+    "label" : label,
+    "type" : type,
+    "options" : options,
+  }
+
+  const params = {
+    "method" : "post",
+    "headers" : HEADERS,
+    "contentType" : "application/json",
+    "payload" : JSON.stringify(payload),
+    "muteHttpExceptions" : true,
+  }
+
+  const url = "https://habitica.com/api/v3/user/webhook";
+  return UrlFetchApp.fetch(url, params);
+}
+
+function initScriptProperties() {
+  scriptProperties.setProperty("anyTaskCount", 0);
+  scriptProperties.setProperty("state", STATES.WELCOME);
+  scriptProperties.setProperty("lastMsgState", STATES.WELCOME);
+
+  scriptProperties.setProperty(SUBCLASS_WARRIOR_1_ABILITY_CRON_COUNT_KEY, 0);
+  scriptProperties.setProperty(SUBCLASS_WARRIOR_1_ABILITY_TOTAL_HP_PAID_KEY, 0);
+
+  scriptProperties.setProperty(SUBCLASS_WARRIOR_3_ABILITY_CRON_COUNT_KEY, 0);
+  scriptProperties.setProperty(SUBCLASS_WARRIOR_3_ABILITY_TOTAL_HP_PAID_KEY, 0);
+
+  scriptProperties.setProperty(SUBCLASS_WARRIOR_4_ABILITY_CRON_COUNT_KEY, 0);
+  scriptProperties.setProperty(SUBCLASS_WARRIOR_4_ABILITY_TOTAL_HP_PAID_KEY, 0);
+}
+
+function apiMult_doStateTransitions(prevState, task, type) {
+  switch (state) {
+    case STATES.WELCOME:
+      // disableClasses / Go to NO_CLASS state
+      if (user.preferences.disableClasses) {
+        state = STATES.NO_CLASS;
+      }
+      // Not disableClasses and class == "warrior" and lvl < 60 / Go to BELOW_LVL_60 state
+      else if (!user.preferences.disableClasses && (user.stats.class == WARRIOR_CLASS_STR) && (user.stats.lvl < LVL_FOR_SUBCLASS)) {
+        state = STATES.BELOW_LVL_60;
+      }
+      // Not disableClasses and class == "warrior" and lvl >= 60 / Go to LVL_60_ABOVE state
+      else if (!user.preferences.disableClasses && (user.stats.class == WARRIOR_CLASS_STR) && (user.stats.lvl >= LVL_FOR_SUBCLASS)) {
+        state = STATES.LVL_60_ABOVE;
+      }
+      // Not disableClasses and class != "warrior" / Go to NON_WARRIOR state
+      else if (!user.preferences.disableClasses && (user.stats.class != WARRIOR_CLASS_STR)) {
+        state = STATES.NON_WARRIOR;
+      }
+
+      break;
+
+    case STATES.NO_CLASS:
+      // Not disableClasses and class == "warrior" and lvl < 60 / Go to BELOW_LVL_60 state
+      if (!user.preferences.disableClasses && (user.stats.class == WARRIOR_CLASS_STR) && (user.stats.lvl < LVL_FOR_SUBCLASS)) {
+        state = STATES.BELOW_LVL_60;
+      }
+      // Not disableClasses and class == "warrior" and lvl >= 60 / Go to LVL_60_ABOVE state
+      else if (!user.preferences.disableClasses && (user.stats.class == WARRIOR_CLASS_STR) && (user.stats.lvl >= LVL_FOR_SUBCLASS)) {
+        state = STATES.LVL_60_ABOVE;
+      }
+      // Not disableClasses and class != "warrior" / Go to NON_WARRIOR state
+      else if (!user.preferences.disableClasses && (user.stats.class != WARRIOR_CLASS_STR)) {
+        state = STATES.NON_WARRIOR;
+      }
+
+      break;
+
+    case STATES.BELOW_LVL_60:
+      // disableClasses / Go to NO_CLASS state
+      if (user.preferences.disableClasses) {
+        state = STATES.NO_CLASS;
+      }
+      // Not disableClasses and class == "warrior" and lvl >= 60 / Go to LVL_60_ABOVE state
+      else if (!user.preferences.disableClasses && (user.stats.class == WARRIOR_CLASS_STR) && (user.stats.lvl >= LVL_FOR_SUBCLASS)) {
+        state = STATES.LVL_60_ABOVE;
+      }
+      // Not disableClasses and class != "warrior" / Go to NON_WARRIOR state
+      else if (!user.preferences.disableClasses && (user.stats.class != WARRIOR_CLASS_STR)) {
+        state = STATES.NON_WARRIOR;
+      }
+
+      break;
+
+    case STATES.LVL_60_ABOVE:
+      // disableClasses / Go to NO_CLASS state
+      if (user.preferences.disableClasses) {
+        state = STATES.NO_CLASS;
+      }
+      // Not disableClasses and class == "warrior" and lvl < 60 / Go to BELOW_LVL_60 state
+      else if (!user.preferences.disableClasses && (user.stats.class == WARRIOR_CLASS_STR) && (user.stats.lvl < LVL_FOR_SUBCLASS)) {
+        state = STATES.BELOW_LVL_60;
+      }
+      // type == "created" and newTaskType == "reward" and newTaskText in "1" to "4"
+      else if ((type == "created") && (task.type == "reward") && (Number(task.text) >= 1) && (Number(task.text) <= 4)) {
+        state = STATES.SUBCLASS_ACTIVE;
+      }
+      // Not disableClasses and class != "warrior" / Go to NON_WARRIOR state
+      else if (!user.preferences.disableClasses && (user.stats.class != WARRIOR_CLASS_STR)) {
+        state = STATES.NON_WARRIOR;
+      }
+
+      break;
+
+    case STATES.SUBCLASS_ACTIVE:
+      // disableClasses / Go to NO_CLASS state
+      if (user.preferences.disableClasses) {
+        state = STATES.NO_CLASS;
+      }
+      // Not disableClasses and class != "warrior" / Go to NON_WARRIOR state
+      else if (!user.preferences.disableClasses && (user.stats.class != WARRIOR_CLASS_STR)) {
+        state = STATES.NON_WARRIOR;
+      }
+
+      // exit / deleteSubclassButtons();
+      if (state != prevState) {
+        apiMult_deleteSubclassButtons();
+      }
+
+      break;
+
+    case STATES.NON_WARRIOR:
+      // disableClasses / Go to NO_CLASS state
+      if (user.preferences.disableClasses) {
+        state = STATES.NO_CLASS;
+      }
+      // Not disableClasses and class == "warrior" and lvl < 60 / Go to BELOW_LVL_60 state
+      else if (!user.preferences.disableClasses && (user.stats.class == WARRIOR_CLASS_STR) && (user.stats.lvl < LVL_FOR_SUBCLASS)) {
+        state = STATES.BELOW_LVL_60;
+      }
+      // Not disableClasses and class == "warrior" and lvl >= 60 / Go to LVL_60_ABOVE state
+      else if (!user.preferences.disableClasses && (user.stats.class == WARRIOR_CLASS_STR) && (user.stats.lvl >= LVL_FOR_SUBCLASS)) {
+        state = STATES.LVL_60_ABOVE;
+      }
+
+      break;
+  }
+}
+
+function apiMult_doStateActions(prevState, task) {
+  var text = "";
+  var notes = "";
+  
+  switch (state) {
+    case STATES.WELCOME:
+      // entry / lastMsgState = WELCOME; setAwakeNpc();
+      if (state != prevState) {
+        lastMsgState = STATES.WELCOME;
+        text += THE_LOST_CLASSERMASTER_BUTTON_TEXT_AWAKE;
+        npcAwake = 1;
+      }
+      
+      break;
+      
+    case STATES.NO_CLASS:
+      // entry / setAwakeNpc();
+      if (state != prevState) {
+        text += THE_LOST_CLASSERMASTER_BUTTON_TEXT_AWAKE;
+        npcAwake = 1;
+      }
+
+      // talkedToNpc / if lastMsgState == NO_CLASS {if npcAwake {appendMsg(NO_CLASS_MSG); sendMsg(); setSleepNpc();}}
+      // else {appendPreMsg(lastMsgState); appendMsg(NO_CLASS_MSG); sendMsg(); lastMsgState = NO_CLASS;}
+      if (task.alias == THE_LOST_CLASSERMASTER_BUTTON_ALIAS) {
+        if (lastMsgState == state) {
+          if (npcAwake) {
+            text += THE_LOST_CLASSERMASTER_BUTTON_TEXT_ASLEEP;
+            notes += HEADER_3_PREFIX + NO_CLASS_MSG;
+            npcAwake = 0;
+          }
+        }
+        else {
+          notes += HEADER_3_PREFIX;
+
+          switch (lastMsgState) {
+            case STATES.WELCOME:
+              notes += NO_CLASS_PRE_MSG;
+              break;
+
+            case STATES.BELOW_LVL_60_MSG:
+              notes += REBORN_BELOW_LVL_60_MSG;
+              break;
+
+            case STATES.LVL_60_ABOVE:
+              notes += REBORN_LVL_60_ABOVE_MSG;
+              break;
+
+            case STATES.SUBCLASS_ACTIVE:
+              notes += REBORN_SUBCLASS_ACTIVE_MSG;
+              break;
+
+            case STATES.NON_WARRIOR:
+              notes += REBORN_NON_WARRIOR_MSG;
+              break;
+          }
+
+          notes += NO_CLASS_MSG;
+          lastMsgState = state;
+        }
+      }
+      
+      break;
+      
+    case STATES.BELOW_LVL_60:
+      // entry / setAwakeNpc();
+      if (state != prevState) {
+        text += THE_LOST_CLASSERMASTER_BUTTON_TEXT_AWAKE;
+        npcAwake = 1;
+      }
+
+      // talkedToNpc / if lastMsgState == BELOW_LVL_60 {if npcAwake {appendMsg(BELOW_LVL_60_MSG); sendMsg(); setSleepNpc();}}
+      //   else {appendPreMsg(lastMsgState); appendMsg(BELOW_LVL_60_MSG); sendMsg(); lastMsgState = BELOW_LVL_60;}
+      if (task.alias == THE_LOST_CLASSERMASTER_BUTTON_ALIAS) {
+        if (lastMsgState == state) {
+          if (npcAwake) {
+            text += THE_LOST_CLASSERMASTER_BUTTON_TEXT_ASLEEP;
+            notes += HEADER_3_PREFIX + BELOW_LVL_60_MSG;
+            npcAwake = 0;
+          }
+        }
+        else {
+          notes += HEADER_3_PREFIX;
+
+          switch (lastMsgState) {
+            case STATES.WELCOME:
+              notes += BELOW_LVL_60_PRE_MSG;
+              break;
+
+            case STATES.NO_CLASS:
+              notes += CLASS_SELECT_MSG_PART_1 + user.stats.class.charAt(0).toUpperCase() + user.stats.class.slice(1) + CLASS_SELECT_MSG_PART_2 + BELOW_LVL_60_PRE_MSG;
+              break;
+
+            case STATES.LVL_60_ABOVE:
+              notes += LVL_DOWN_MSG;
+              break;
+
+            case STATES.NON_WARRIOR:
+              notes += CHANGE_WARRIOR_MSG + BELOW_LVL_60_PRE_MSG;
+              break;
+          }
+
+          notes += BELOW_LVL_60_MSG;
+          lastMsgState = state;
+        }
+      }
+      
+      break;
+      
+    case STATES.LVL_60_ABOVE:
+      // entry / setAwakeNpc();
+      if (state != prevState) {
+        text += THE_LOST_CLASSERMASTER_BUTTON_TEXT_AWAKE;
+        npcAwake = 1;
+      }
+
+      // talkedToNpc / if lastMsgState == LVL_60_ABOVE {appendMsg(LVL_60_ABOVE_MSG_2); sendMsg();}
+      //   else {appendPreMsg(lastMsgState); appendMsg(LVL_60_ABOVE_MSG_1); sendMsg(); lastMsgState = LVL_60_ABOVE;}
+      if (task.alias == THE_LOST_CLASSERMASTER_BUTTON_ALIAS) {
+        if (lastMsgState == state) {
+          notes += HEADER_3_PREFIX + LVL_60_ABOVE_MSG_2;
+        }
+        else {
+          notes += HEADER_3_PREFIX;
+
+          switch (lastMsgState) {
+            case STATES.NO_CLASS:
+            case STATES.BELOW_LVL_60:
+              notes += LVL_ABOVE_60_PRE_MSG;
+              break;
+
+            case STATES.NON_WARRIOR:
+              notes += CHANGE_WARRIOR_MSG + LVL_ABOVE_60_PRE_MSG;
+              break;
+          }
+
+          notes += LVL_60_ABOVE_MSG_1;
+          lastMsgState = state;
+        }
+      }
+      
+      break;
+      
+    case STATES.SUBCLASS_ACTIVE:
+      // entry / createSubclassButtons(); moveUpdateMsgToTop(); deleteSubclassChoiceTask();
+      if (state != prevState) {
+        api_createSubclassButtons(task.text);
+        api_moveTask(UPDATE_MSG_BUTTON_ALIAS, 0); // Position 0 = top of list
+        api_deleteTask(task._id);
+      }
+
+      // talkedToNpc or justSelectedSubclass / if lastMsgState == SUBCLASS_ACTIVE {if npcAwake {appendMsg(SUBCLASS_ACTIVE_MSG); sendMsg(); setSleepNpc();}}
+      // else {appendPreMsg(lastMsgState); appendMsg(SUBCLASS_ACTIVE_MSG); sendMsg(); lastMsgState = SUBCLASS_ACTIVE;
+      if ((task.alias == THE_LOST_CLASSERMASTER_BUTTON_ALIAS) || (state != prevState)) {
+        if (lastMsgState == state) {
+          if (npcAwake) {
+            text += THE_LOST_CLASSERMASTER_BUTTON_TEXT_ASLEEP;
+            notes += HEADER_3_PREFIX + SUBCLASS_ACTIVE_MSG;
+            npcAwake = 0;
+          }
+        }
+        else {
+          notes += HEADER_3_PREFIX;
+
+          switch (lastMsgState) {
+            case STATES.LVL_60_ABOVE:
+              notes += SUBCLASS_ACTIVE_PRE_MSG;
+
+              switch (task.text) {
+                case "1":
+                  notes += SUBCLASS_WARRIOR_1_NAME + ". ";
+                  break;
+
+                case "2":
+                  notes += SUBCLASS_WARRIOR_2_NAME + ". ";
+                  break;
+
+                case "3":
+                  notes += SUBCLASS_WARRIOR_3_NAME + ". ";
+                  break;
+
+                case "4":
+                  notes += SUBCLASS_WARRIOR_4_NAME + ". ";
+                  break;
+              }
+
+              break;
+          }
+
+          notes += SUBCLASS_ACTIVE_MSG;
+          lastMsgState = state;
+        }
+      }
+
+      break;
+      
+    case STATES.NON_WARRIOR:
+      // entry / setAwakeNpc();
+      if (state != prevState) {
+        text += THE_LOST_CLASSERMASTER_BUTTON_TEXT_AWAKE;
+        npcAwake = 1;
+      }
+
+      // talkedToNpc / if lastMsgState == NON_WARRIOR {if npcAwake {appendMsg(NON_WARRIOR_MSG); sendMsg(); setSleepNpc();}}
+      //   else {appendPreMsg(lastMsgState); appendMsg(NON_WARRIOR_MSG); sendMsg(); lastMsgState = NON_WARRIOR;}
+      if (task.alias == THE_LOST_CLASSERMASTER_BUTTON_ALIAS) {
+        if (lastMsgState == state) {
+          if (npcAwake) {
+            text += THE_LOST_CLASSERMASTER_BUTTON_TEXT_ASLEEP;
+            notes += HEADER_3_PREFIX + NON_WARRIOR_MSG;
+            npcAwake = 0;
+          }
+        }
+        else {
+          notes += HEADER_3_PREFIX;
+          
+          switch (lastMsgState) {
+            case STATES.WELCOME:
+              notes += NON_WARRIOR_PRE_MSG;
+              break;
+
+            case STATES.NO_CLASS:
+              notes += CLASS_SELECT_MSG_PART_1 + user.stats.class.charAt(0).toUpperCase() + user.stats.class.slice(1) + CLASS_SELECT_MSG_PART_2 + NON_WARRIOR_PRE_MSG;
+              break;
+
+            case STATES.BELOW_LVL_60:
+            case STATES.LVL_60_ABOVE:
+            case STATES.SUBCLASS_ACTIVE:
+              notes += CHANGE_NON_WARRIOR_MSG;
+              break;
+          }
+
+          notes += NON_WARRIOR_MSG;
+          lastMsgState = state;
+        }
+      }
+      
+      break;
+  }
+
+  // Update task button if needed
+  if (text != "") {
+    if (notes != "") {
+      api_changeTask(THE_LOST_CLASSERMASTER_BUTTON_ALIAS, {"text" : text, "notes" : notes});
+      api_forceSyncOnTaskScore();
+    }
+    else {
+      api_changeTask(THE_LOST_CLASSERMASTER_BUTTON_ALIAS, {"text" : text});
+      api_forceSyncOnTaskScore();
+    }
+  }
+  else if (notes != "") {
+    api_changeTask(THE_LOST_CLASSERMASTER_BUTTON_ALIAS, {"notes" : notes});
+    api_forceSyncOnTaskScore();
+  }
+}
+
+function apiMult_deleteSubclassButtons() {
+  const response = api_getTasks("rewards");
+  const rewardTasks = JSON.parse(response).data;
+
+  // Delete tasks with aliases matching known subclass buttons
+  for (var i in rewardTasks) {
+    if (SUBCLASS_BUTTONS_ALIASES.includes(rewardTasks[i].alias)) {
+      api_deleteTask(rewardTasks[i].alias);
+    }
+  }
+}
+
+function api_getTasks(type) {
+  const params = {
+    "method" : "get",
+    "headers" : HEADERS,
+    "muteHttpExceptions" : true,
+  }
+  
+  var url = "https://habitica.com/api/v3/tasks/user";
+  if (type != "") {
+    url += "?type=" + type;
+  }
+
+  return UrlFetchApp.fetch(url, params);
+}
+
+function api_deleteTask(idOrAlias) {
+  const params = {
+    "method" : "delete",
+    "headers" : HEADERS,
+    "muteHttpExceptions" : true,
+  }
+  
+  var url = "https://habitica.com/api/v3/tasks/" + idOrAlias; 
+  return UrlFetchApp.fetch(url, params);
+}
+
+function api_createSubclassButtons(taskText) {
+  var subclassButtons = [];
+  
+  const subclassWarrior1Button = {
+    "text" : SUBCLASS_WARRIOR_1_TEXT,
+    "type" : "reward",
+    "alias" : SUBCLASS_WARRIOR_1_ALIAS,
+    "notes" : SUBCLASS_WARRIOR_1_NOTES,
+  }
+
+  const subclassWarrior2Button = {
+    "text" : SUBCLASS_WARRIOR_2_TEXT,
+    "type" : "reward",
+    "alias" : SUBCLASS_WARRIOR_2_ALIAS,
+    "notes" : SUBCLASS_WARRIOR_2_NOTES,
+  }
+
+  const subclassWarrior2Ability1Button = {
+    "text" : SUBCLASS_WARRIOR_2_ABILITY_1_TEXT,
+    "type" : "reward",
+    "alias" : SUBCLASS_WARRIOR_2_ABILITY_1_ALIAS,
+    "notes" : SUBCLASS_WARRIOR_2_ABILITY_1_NOTES,
+  }
+
+  const subclassWarrior2Ability2Button = {
+    "text" : SUBCLASS_WARRIOR_2_ABILITY_2_TEXT,
+    "type" : "reward",
+    "alias" : SUBCLASS_WARRIOR_2_ABILITY_2_ALIAS,
+    "notes" : SUBCLASS_WARRIOR_2_ABILITY_2_NOTES,
+  }
+
+  const subclassWarrior3Button = {
+    "text" : SUBCLASS_WARRIOR_3_TEXT,
+    "type" : "reward",
+    "alias" : SUBCLASS_WARRIOR_3_ALIAS,
+    "notes" : SUBCLASS_WARRIOR_3_NOTES,
+  }
+
+  const subclassWarrior4Button = {
+    "text" : SUBCLASS_WARRIOR_4_TEXT,
+    "type" : "reward",
+    "alias" : SUBCLASS_WARRIOR_4_ALIAS,
+    "notes" : SUBCLASS_WARRIOR_4_NOTES,
+  }
+
+  switch (taskText) {
+    case "1":
+      subclassButtons = [subclassWarrior1Button];
+      break;
+
+    case "2":
+      subclassButtons = [subclassWarrior2Ability2Button, subclassWarrior2Ability1Button, subclassWarrior2Button];
+      break;
+
+    case "3":
+      subclassButtons = [subclassWarrior3Button];
+      break;
+
+    case "4":
+      subclassButtons = [subclassWarrior4Button];
+      break;
+  }
+  
+  const params = {
+    "method" : "post",
+    "headers" : HEADERS,
+    "contentType" : "application/json",
+    "payload" : JSON.stringify(subclassButtons),
+    "muteHttpExceptions" : true,
+  }
+
+  const url = "https://habitica.com/api/v3/tasks/user";
+  return UrlFetchApp.fetch(url, params);
+}
+
+function api_moveTask(idOrAlias, position) {
+  const params = {
+    "method" : "post",
+    "headers" : HEADERS,
+    "muteHttpExceptions" : true,
+  }
+  
+  const url = "https://habitica.com/api/v3/tasks/" + idOrAlias + "/move/to/" + position;
+  return UrlFetchApp.fetch(url, params);  
+}
+
+function apiMult_doSubclassWarrior1Action() {
+  subclassName = SUBCLASS_WARRIOR_1_NAME;
+  cronCountKey = SUBCLASS_WARRIOR_1_ABILITY_CRON_COUNT_KEY;
+  totalHpPaidKey = SUBCLASS_WARRIOR_1_ABILITY_TOTAL_HP_PAID_KEY;
+  totalHpPaidMax = SUBCLASS_ABILITY_TOTAL_HP_PAID_MAX;
+  baseHpCost = SUBCLASS_ABILITY_BASE_HP_COST;
+  diceNumber = SUBCLASS_WARRIOR_1_ABILITY_DICE_NUMBER;
+  diceType = SUBCLASS_WARRIOR_1_ABILITY_DICE_TYPE;
+  abilityStatReward = SUBCLASS_WARRIOR_1_ABILITY_STAT_REWARD;
+  message1Start = SUBCLASS_WARRIOR_1_ABILITY_REWARD_MSG_1_START;
+  message1End = SUBCLASS_WARRIOR_1_ABILITY_REWARD_MSG_1_END;
+  message2Start = SUBCLASS_WARRIOR_1_ABILITY_REWARD_MSG_2_START;
+  message2End = SUBCLASS_WARRIOR_1_ABILITY_REWARD_MSG_2_END;
+  message3Start = SUBCLASS_WARRIOR_1_ABILITY_REWARD_MSG_3_START;
+  message3End = SUBCLASS_WARRIOR_1_ABILITY_REWARD_MSG_3_END;
+
+  apiMult_doHpToRewardAction();
+}
+
+function apiMult_doSubclassWarrior2Action() {
+  api_changeTask(UPDATE_MSG_BUTTON_ALIAS, {"notes" : SUBCLASS_WARRIOR_2_ABILITY_MSG});
+  api_forceSyncOnTaskScore();
+}
+
+function apiMult_doSubclassWarrior2Ability1Action() {
+  subclassName = SUBCLASS_WARRIOR_2_NAME;
+  skillId = SUBCLASS_WARRIOR_2_ABILITY_1_ID;
+  baseMpCost = SUBCLASS_WARRIOR_2_ABILITY_1_BASE_MP_COST;
+  diceType = SUBCLASS_WARRIOR_2_ABILITY_1_DICE_TYPE;
+  abilityChancePercent = SUBCLASS_WARRIOR_2_ABILITY_CHANCE_PERCENT;
+  message1Start = SUBCLASS_WARRIOR_2_ABILITY_1_REWARD_MSG_1_START;
+  message1End = SUBCLASS_WARRIOR_2_ABILITY_1_REWARD_MSG_1_END;
+  message2Start = SUBCLASS_WARRIOR_2_ABILITY_1_REWARD_MSG_2_START;
+  message2End = SUBCLASS_WARRIOR_2_ABILITY_1_REWARD_MSG_2_END;
+  message3Start = SUBCLASS_WARRIOR_2_ABILITY_1_REWARD_MSG_3_START;
+  message3End = SUBCLASS_WARRIOR_2_ABILITY_1_REWARD_MSG_3_END;
+
+  apiMult_doMultiCastAction();
+}
+
+function apiMult_doSubclassWarrior2Ability2Action() {
+  subclassName = SUBCLASS_WARRIOR_2_NAME;
+  skillId = SUBCLASS_WARRIOR_2_ABILITY_2_ID;
+  baseMpCost = SUBCLASS_WARRIOR_2_ABILITY_2_BASE_MP_COST;
+  diceType = SUBCLASS_WARRIOR_2_ABILITY_2_DICE_TYPE;
+  abilityChancePercent = SUBCLASS_WARRIOR_2_ABILITY_CHANCE_PERCENT;
+  message1Start = SUBCLASS_WARRIOR_2_ABILITY_2_REWARD_MSG_1_START;
+  message1End = SUBCLASS_WARRIOR_2_ABILITY_2_REWARD_MSG_1_END;
+  message2Start = SUBCLASS_WARRIOR_2_ABILITY_2_REWARD_MSG_2_START;
+  message2End = SUBCLASS_WARRIOR_2_ABILITY_2_REWARD_MSG_2_END;
+  message3Start = SUBCLASS_WARRIOR_2_ABILITY_2_REWARD_MSG_3_START;
+  message3End = SUBCLASS_WARRIOR_2_ABILITY_2_REWARD_MSG_3_END;
+
+  apiMult_doMultiCastAction();
+}
+
+function apiMult_doSubclassWarrior3Action() {
+  subclassName = SUBCLASS_WARRIOR_3_NAME;
+  cronCountKey = SUBCLASS_WARRIOR_3_ABILITY_CRON_COUNT_KEY;
+  totalHpPaidKey = SUBCLASS_WARRIOR_3_ABILITY_TOTAL_HP_PAID_KEY;
+  totalHpPaidMax = SUBCLASS_ABILITY_TOTAL_HP_PAID_MAX;
+  baseHpCost = SUBCLASS_ABILITY_BASE_HP_COST;
+  diceNumber = SUBCLASS_WARRIOR_3_ABILITY_DICE_NUMBER;
+  diceType = SUBCLASS_WARRIOR_3_ABILITY_DICE_TYPE;
+  abilityStatReward = SUBCLASS_WARRIOR_3_ABILITY_STAT_REWARD;
+  message1Start = SUBCLASS_WARRIOR_3_ABILITY_REWARD_MSG_1_START;
+  message1End = SUBCLASS_WARRIOR_3_ABILITY_REWARD_MSG_1_END;
+  message2Start = SUBCLASS_WARRIOR_3_ABILITY_REWARD_MSG_2_START;
+  message2End = SUBCLASS_WARRIOR_3_ABILITY_REWARD_MSG_2_END;
+  message3Start = SUBCLASS_WARRIOR_3_ABILITY_REWARD_MSG_3_START;
+  message3End = SUBCLASS_WARRIOR_3_ABILITY_REWARD_MSG_3_END;
+
+  apiMult_doHpToRewardAction();
+}
+
+function apiMult_doSubclassWarrior4Action() {
+  subclassName = SUBCLASS_WARRIOR_4_NAME;
+  cronCountKey = SUBCLASS_WARRIOR_4_ABILITY_CRON_COUNT_KEY;
+  totalHpPaidKey = SUBCLASS_WARRIOR_4_ABILITY_TOTAL_HP_PAID_KEY;
+  totalHpPaidMax = SUBCLASS_ABILITY_TOTAL_HP_PAID_MAX;
+  baseHpCost = SUBCLASS_ABILITY_BASE_HP_COST;
+  diceType = SUBCLASS_WARRIOR_4_ABILITY_DICE_TYPE;
+  message1Start = SUBCLASS_WARRIOR_4_ABILITY_REWARD_MSG_1_START;
+  message1End = SUBCLASS_WARRIOR_4_ABILITY_REWARD_MSG_1_END;
+  message2Start = SUBCLASS_WARRIOR_4_ABILITY_REWARD_MSG_2_START;
+  message2End = SUBCLASS_WARRIOR_4_ABILITY_REWARD_MSG_2_END;
+  message3Start = SUBCLASS_WARRIOR_4_ABILITY_REWARD_MSG_3_START;
+  message3End = SUBCLASS_WARRIOR_4_ABILITY_REWARD_MSG_3_END;
+  
+  apiMult_doHpToRareRewardAction();
+}
+
+function apiMult_doHpToRewardAction() {
+  // Get equipment stats info
+  apiFree_getContentInfo();
+  
+  // If new day, reset total HP paid counter
+  if (Number(scriptProperties.getProperty(cronCountKey)) != user.flags.cronCount) {
+    scriptProperties.setProperty(cronCountKey, user.flags.cronCount);
+    scriptProperties.setProperty(totalHpPaidKey, 0);
+  }
+  
+  // Compute total Constitution
+  const con = calcTotalConstitution();
+  
+  // Compute Health cost
+  const hpCost = baseHpCost * (1 - (Math.min(con, SUBCLASS_ABILITY_CON_MAX) / SUBCLASS_ABILITY_CON_DIVISOR));
+  const totalHpPaid = Number(scriptProperties.getProperty(totalHpPaidKey));
+  
+  var messageFixed = "";
+  var messageVar = "";
+  var hp = user.stats.hp;
+  var mp = user.stats.mp;
+  var exp = user.stats.exp;
+  var gp = user.stats.gp;
+  
+  // If (Total HP paid for the day > totalHpPaidMax), send max HP paid reached message via notes
+  if (totalHpPaid >= totalHpPaidMax) {
+    messageFixed = MAX_HP_FAIL_NOTES;
+  }
+  // If (Present HP - Health cost) < 1, send no HP message via notes
+  else if ((hp - hpCost) < 1) {
+    messageFixed = NO_HP_FAIL_NOTES;
+  }
+  else {
+    // Compute roll needed to level up
+    var roll = new Array(diceNumber);
+    var rollSum = 0;
+    
+    messageFixed = "You gained ";
+    
+    for (var i = 0; i < diceNumber; i++) {
+      roll[i] = Math.floor(Math.random() * diceType) + 1;
+      rollSum += roll[i];
+      messageFixed += roll[i];
+      if (i < (diceNumber - 1)) {
+        messageFixed += " + ";
+      }
+    }
+    
+    messageFixed += " = **" + rollSum + "** " + abilityStatReward + ". ";
+    
+    hp -= hpCost;
+    scriptProperties.setProperty(totalHpPaidKey, totalHpPaid + hpCost);
+    
+    switch (abilityStatReward) {
+      case "mana":
+        mp += rollSum;
+        break;
+        
+      case "gold":
+        gp += rollSum;
+        break;
+    }
+    
+    // Create reaction message
+    if (rollSum > ((diceNumber * (diceType - 1) * 11 / 16)) + diceNumber) {
+      messageVar = "Excellent!!!";
+      
+      // Send confirmation PM if enabled
+      if (Math.random() < (NOTIFICATION_CHANCE * 4)) {
+        const messageRoll = Math.random();
+        
+        if (messageRoll > 2/3) {
+          api_sendPartyMessage("`" + user.profile.name + message1Start + "`[" + subclassName + "](" + SCRIPT_LINK + ")`" + message1End + rollSum + " " + abilityStatReward + "!`");
+        }
+        else if (messageRoll > 1/3) {
+          api_sendPartyMessage("`" + user.profile.name + message2Start + "`[" + subclassName + "](" + SCRIPT_LINK + ")`" + message2End + rollSum + " " + abilityStatReward + "!`");
+        }
+        else {
+          api_sendPartyMessage("`" + user.profile.name + message3Start + "`[" + subclassName + "](" + SCRIPT_LINK + ")`" + message3End + rollSum + " " + abilityStatReward + "!`");
+        }
+      }
+    }
+    else if (rollSum > ((diceNumber * (diceType - 1) * 8 / 16)) + diceNumber) {
+      messageVar = "Awesome!";
+    }
+    else if (rollSum > ((diceNumber * (diceType - 1) * 5 / 16)) + diceNumber) {
+      messageVar = "Nice.";
+    }
+    else {
+      messageVar = "Not bad...";
+    }
+  }
+  
+  api_changeTask(UPDATE_MSG_BUTTON_ALIAS, {"notes" : messageFixed + messageVar});
+  api_changeStats(hp, mp, exp, gp);
+}
+
+function apiMult_doMultiCastAction() {
+  const mpCost = baseMpCost;
+  
+  var messageFixed = "";
+  var messageVar = "";
+  var hp = user.stats.hp;
+  var mp = user.stats.mp;
+  var exp = user.stats.exp;
+  var gp = user.stats.gp;
+  
+  // If Present MP < Mana cost, send no MP message via notes
+  if (mp < mpCost) {
+    messageFixed = NO_MP_FAIL_NOTES;
+  }
+  else {
+    // Compute roll needed to triple-cast
+    const rollNeeded = diceType + 1 - (Math.ceil(abilityChancePercent * diceType / 100));
+    const roll = Math.floor(Math.random() * diceType) + 1;
+    
+    messageFixed = "Need to roll ≥ " + rollNeeded + " to triple-cast.  \n You rolled " + roll + ". ";
+    
+    // If roll is below needed, send unsuccessful roll message via notes
+    if (roll < rollNeeded) {
+      if ((rollNeeded - roll) <= (0.1 * diceType)) {
+        messageVar = "Almost got it!";
+      }
+      else if ((rollNeeded - roll) <= (0.3 * diceType)) {
+        messageVar = "Not bad.";
+      }
+      else {
+        messageVar = "Not even close...";
+      }
+      
+      // Use skill just once
+      api_useSkill(skillId);
+    }
+    // else level up and send successful roll message via notes
+    else {
+      messageVar = "Excellent!!!";
+      
+      // Send confirmation PM if enabled
+      if (Math.random() < (NOTIFICATION_CHANCE * 4)) {
+        const messageRoll = Math.random();
+        
+        if (messageRoll > 2/3) {
+          api_sendPartyMessage("`" + user.profile.name + message1Start + "`[" + subclassName + "](" + SCRIPT_LINK + ")`" + message1End + "`");
+        }
+        else if (messageRoll > 1/3) {
+          api_sendPartyMessage("`" + user.profile.name + message2Start + "`[" + subclassName + "](" + SCRIPT_LINK + ")`" + message2End + "`");
+        }
+        else {
+          api_sendPartyMessage("`" + user.profile.name + message3Start + "`[" + subclassName + "](" + SCRIPT_LINK + ")`" + message3End + "`");
+        }
+      }
+      
+      // Give bonus MP then use skill three times
+      api_changeStats(hp, mp + (2 * mpCost), exp, gp);
+      api_useSkill(skillId);
+      api_useSkill(skillId);
+      api_useSkill(skillId);
+    }
+  }
+
+  api_changeTask(UPDATE_MSG_BUTTON_ALIAS, {"notes" : messageFixed + messageVar});
+}
+
+function apiMult_doHpToRareRewardAction() {
+  // Get equipment stats info
+  apiFree_getContentInfo();
+  
+  // If new day, reset total HP paid counter
+  if (Number(scriptProperties.getProperty(cronCountKey)) != user.flags.cronCount) {
+    scriptProperties.setProperty(cronCountKey, user.flags.cronCount);
+    scriptProperties.setProperty(totalHpPaidKey, 0);
+  }
+  
+  // Compute total Constitution
+  const con = calcTotalConstitution();
+  
+  // Compute Health cost
+  const hpCost = baseHpCost * (1 - (Math.min(con, SUBCLASS_ABILITY_CON_MAX) / SUBCLASS_ABILITY_CON_DIVISOR));
+  const totalHpPaid = Number(scriptProperties.getProperty(totalHpPaidKey));
+  
+  var messageFixed = "";
+  var messageVar = "";
+  var hp = user.stats.hp;
+  var mp = user.stats.mp;
+  var exp = user.stats.exp;
+  var gp = user.stats.gp;
+  
+  // If (Total HP paid for the day > totalHpPaidMax), send max HP paid reached message via notes
+  if (totalHpPaid >= totalHpPaidMax) {
+    messageFixed = MAX_HP_FAIL_NOTES;
+  }
+  // If (Present HP - Health cost) < 1, send no HP message via notes
+  else if ((hp - hpCost) < 1) {
+    messageFixed = NO_HP_FAIL_NOTES;
+  }
+  else {
+    // Compute roll needed to level up
+    const percentChance = Math.min(100.0, SUBCLASS_WARRIOR_4_ABILITY_LEVEL_DIVIDEND / user.stats.lvl);
+    const rollNeeded = diceType + 1 - (Math.ceil(percentChance * diceType / 100));
+    const roll = Math.floor(Math.random() * diceType) + 1;
+    
+    messageFixed = "Need to roll ≥ " + rollNeeded + " to level  up.  \n You rolled " + roll + ". ";
+    hp -= hpCost;
+    scriptProperties.setProperty(totalHpPaidKey, totalHpPaid + hpCost);
+    
+    // If roll is below needed, send unsuccessful roll message via notes
+    if (roll < rollNeeded) {
+      if ((rollNeeded - roll) <= (0.1 * diceType)) {
+        messageVar = "Almost got it!";
+      }
+      else if ((rollNeeded - roll) <= (0.3 * diceType)) {
+        messageVar = "Not bad.";
+      }
+      else {
+        messageVar = "Not even close...";
+      }
+    }
+    // else level up and send successful roll message via notes
+    else {
+      messageVar = "Congratulations!";
+      exp += Math.round((Math.pow(user.stats.lvl, 2) * 0.25 + 10 * user.stats.lvl + 139.75) / 10) * 10; // From https://github.com/HabitRPG/habitica/blob/8702a28bcc21139c4409666068116e30515009a6/website/common/script/statHelpers.js#L25-L32
+      
+      // Send confirmation PM if enabled
+      if (Math.random() < (NOTIFICATION_CHANCE * 4)) {
+        const messageRoll = Math.random();
+        
+        if (messageRoll > 2/3) {
+          api_sendPartyMessage("`" + user.profile.name + message1Start + "`[" + subclassName + "](" + SCRIPT_LINK + ")`" + message1End + "`");
+        }
+        else if (messageRoll > 1/3) {
+          api_sendPartyMessage("`" + user.profile.name + message2Start + "`[" + subclassName + "](" + SCRIPT_LINK + ")`" + message2End + "`");
+        }
+        else {
+          api_sendPartyMessage("`" + user.profile.name + message3Start + "`[" + subclassName + "](" + SCRIPT_LINK + ")`" + message3End + "`");
+        }
+      }
+    }
+  }
+  
+  api_changeTask(UPDATE_MSG_BUTTON_ALIAS, {"notes" : messageFixed + messageVar});
+  api_changeStats(hp, mp, exp, gp);
+}
+
+function apiFree_getContentInfo() {
+  const params = {
+    "method" : "get",
+    "muteHttpExceptions" : true,
+  }
+  
+  const url = "https://habitica.com/api/v3/content";
+  const response = UrlFetchApp.fetch(url, params);
+  content = JSON.parse(response).data;
+  return response;
+}
+
+function api_useSkill(skillId) {
+  const params = {
+    "method" : "post",
+    "headers" : HEADERS,
+    "muteHttpExceptions" : true,
+  }
+
+  const url = "https://habitica.com/api/v3/user/class/cast/" + skillId;
+  return UrlFetchApp.fetch(url, params);
+}
+
+function api_changeTask(idOrAlias, payload) {
+  const params = {
+    "method" : "put",
+    "headers" : HEADERS,
+    "contentType" : "application/json",
+    "payload" : JSON.stringify(payload),
+    "muteHttpExceptions" : true,
+  }
+
+  const url = "https://habitica.com/api/v3/tasks/" + idOrAlias;
+  return UrlFetchApp.fetch(url, params);
+}
+
+function api_changeStats(hp, mp, exp, gp) {
+  const payload = {
+    "stats.hp" : hp,
+    "stats.mp" : mp,
+    "stats.exp" : exp,
+    "stats.gp" : gp,
+  }
+  
+  const params = {
+    "method" : "put",
+    "headers" : HEADERS,
+    "contentType" : "application/json",
+    "payload" : JSON.stringify(payload),
+    "muteHttpExceptions" : true,
+  }
+  
+  const url = "https://habitica.com/api/v3/user";
+  return UrlFetchApp.fetch(url, params);
+}
+
+function api_forceSyncOnTaskScore() {
+  const payload = {
+    "stats.training.con" : 0, // To force sync next time a task is scored, a stat must be written to. Writing on a usually unused stat value.
+  }
+  
+  const params = {
+    "method" : "put",
+    "headers" : HEADERS,
+    "contentType" : "application/json",
+    "payload" : JSON.stringify(payload),
+    "muteHttpExceptions" : true,
+  }
+  
+  const url = "https://habitica.com/api/v3/user";
+  return UrlFetchApp.fetch(url, params);
+}
+
+function api_sendPartyMessage(message) {
+  const payload = {
+    "message" : message,
+  }
+  
+  const params = {
+    "method" : "post",
+    "headers" : HEADERS,
+    "contentType" : "application/json",
+    "payload" : JSON.stringify(payload),
+    "muteHttpExceptions" : true,
+  }
+  
+  const url = "https://habitica.com/api/v3/groups/party/chat";
+  return UrlFetchApp.fetch(url, params);
+}
+
+function calcTotalConstitution() {
+  const levelCon = Math.floor(user.stats.lvl / 2);
+  var totalEquipmentAndClassCon = 0;
+  const allocatedCon = user.stats.con;
+  const buffsCon = user.stats.buffs.con;
+
+  // Get CON from equipped gear
+  totalEquipmentAndClassCon += calcEquipmentAndClassCon(content.gear.flat[user.items.gear.equipped.weapon]);
+  totalEquipmentAndClassCon += calcEquipmentAndClassCon(content.gear.flat[user.items.gear.equipped.shield]);
+  totalEquipmentAndClassCon += calcEquipmentAndClassCon(content.gear.flat[user.items.gear.equipped.head]);
+  totalEquipmentAndClassCon += calcEquipmentAndClassCon(content.gear.flat[user.items.gear.equipped.armor]);
+  totalEquipmentAndClassCon += calcEquipmentAndClassCon(content.gear.flat[user.items.gear.equipped.headAccessory]);
+  totalEquipmentAndClassCon += calcEquipmentAndClassCon(content.gear.flat[user.items.gear.equipped.eyewear]);
+  totalEquipmentAndClassCon += calcEquipmentAndClassCon(content.gear.flat[user.items.gear.equipped.body]);
+  totalEquipmentAndClassCon += calcEquipmentAndClassCon(content.gear.flat[user.items.gear.equipped.back]);
+
+  return levelCon + totalEquipmentAndClassCon + allocatedCon + buffsCon;
+}
+
+function calcEquipmentAndClassCon(equipment) {
+  var equipmentAndClassCon = 0;
+
+  if (equipment != undefined) {  
+    equipmentAndClassCon += equipment.con;
+    if (equipment.klass == user.stats.class) {
+      equipmentAndClassCon += equipment.con / 2;
+    }
+  }
+  
+  return equipmentAndClassCon;
+}
