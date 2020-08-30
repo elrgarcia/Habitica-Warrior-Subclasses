@@ -52,7 +52,8 @@ const SUBCLASS_ABILITY_BASE_HP_COST = 10.0;
 const SUBCLASS_ABILITY_TOTAL_HP_PAID_MAX = 50.0;
 const HEALTH_FOOTNOTE = "\n\n*Cost goes down to " + (SUBCLASS_ABILITY_BASE_HP_COST * (1 - (SUBCLASS_ABILITY_CON_MAX / SUBCLASS_ABILITY_CON_DIVISOR))) + " Health at " + SUBCLASS_ABILITY_CON_MAX + " CON. Maximum of " + SUBCLASS_ABILITY_TOTAL_HP_PAID_MAX + " Health used per day.";
 
-const MAX_HP_FAIL_NOTES = "Already used max Health for this ability today. Try again after you [Cron](https://habitica.fandom.com/wiki/Cron).";
+const MAX_TOTAL_HP_PAID_FAIL_NOTES = "Already used the max amount of Health for this ability today. Try again after you [Cron](https://habitica.fandom.com/wiki/Cron).";
+const MAX_USAGE_FAIL_NOTES = "Already used this ability the max number of times today. Try again after you [Cron](https://habitica.fandom.com/wiki/Cron).";
 const NO_HP_FAIL_NOTES = "Not enough Health to use ability.";
 const NO_MP_FAIL_NOTES = "Not enough Mana to use ability.";
 
@@ -84,14 +85,17 @@ const SUBCLASS_WARRIOR_1_ABILITY_REWARD_MSG_3_END = " and gains ";
 
 const SUBCLASS_WARRIOR_2_ABILITY_1_NAME = "Valorous Presence";
 const SUBCLASS_WARRIOR_2_ABILITY_2_NAME = "Intimidating Gaze";
-const SUBCLASS_WARRIOR_2_ABILITY_CHANCE_PERCENT = 25.0;
+const SUBCLASS_WARRIOR_2_ABILITY_CHANCE_PERCENT = 50.0;
+const SUBCLASS_WARRIOR_2_ABILITY_USAGE_MAX = 4.0;
 
 const SUBCLASS_WARRIOR_2_NAME = "Defender";
 const SUBCLASS_WARRIOR_2_QUOTE = "The valiant protector of righteousness.";
-const SUBCLASS_WARRIOR_2_ABILITY = "Use the " + SUBCLASS_WARRIOR_2_NAME + "'s versions of " + SUBCLASS_WARRIOR_2_ABILITY_1_NAME + " or " + SUBCLASS_WARRIOR_2_ABILITY_2_NAME + " for " + SUBCLASS_WARRIOR_2_ABILITY_CHANCE_PERCENT + "% chance to triple-cast the skill (2nd & 3rd free)";
+const SUBCLASS_WARRIOR_2_ABILITY = "Use the " + SUBCLASS_WARRIOR_2_NAME + "'s versions of " + SUBCLASS_WARRIOR_2_ABILITY_1_NAME + " or " + SUBCLASS_WARRIOR_2_ABILITY_2_NAME + " for " + SUBCLASS_WARRIOR_2_ABILITY_CHANCE_PERCENT + "% chance to triple-cast the skill (2nd & 3rd free). Maximum of " + SUBCLASS_WARRIOR_2_ABILITY_USAGE_MAX + " times used per day.";
 const SUBCLASS_WARRIOR_2_TEXT = "## **" + SUBCLASS_WARRIOR_2_NAME + '**  \n_"' + SUBCLASS_WARRIOR_2_QUOTE + '"_';
 const SUBCLASS_WARRIOR_2_ALIAS = "SUBCLASS_WARRIOR_2_ALIAS";
 const SUBCLASS_WARRIOR_2_NOTES = SUBCLASS_WARRIOR_2_ABILITY;
+const SUBCLASS_WARRIOR_2_ABILITY_CRON_COUNT_KEY = "SUBCLASS_WARRIOR_2_ABILITY_CRON_COUNT_KEY";
+const SUBCLASS_WARRIOR_2_ABILITY_USAGE_KEY = "SUBCLASS_WARRIOR_2_ABILITY_USAGE_KEY";
 const SUBCLASS_WARRIOR_2_ABILITY_MSG = 'Please use the buttons called "' + SUBCLASS_WARRIOR_2_NAME + "'s" + ' Presence" and "' + SUBCLASS_WARRIOR_2_NAME + "'s" + ' Gaze"';
 
 const SUBCLASS_WARRIOR_2_ABILITY_1_TEXT = "### **" + SUBCLASS_WARRIOR_2_NAME + "'s Presence**";
@@ -512,6 +516,9 @@ function initScriptProperties() {
 
   scriptProperties.setProperty(SUBCLASS_WARRIOR_1_ABILITY_CRON_COUNT_KEY, 0);
   scriptProperties.setProperty(SUBCLASS_WARRIOR_1_ABILITY_TOTAL_HP_PAID_KEY, 0);
+
+  scriptProperties.setProperty(SUBCLASS_WARRIOR_2_ABILITY_CRON_COUNT_KEY, 0);
+  scriptProperties.setProperty(SUBCLASS_WARRIOR_2_ABILITY_USAGE_KEY, 0);
 
   scriptProperties.setProperty(SUBCLASS_WARRIOR_3_ABILITY_CRON_COUNT_KEY, 0);
   scriptProperties.setProperty(SUBCLASS_WARRIOR_3_ABILITY_TOTAL_HP_PAID_KEY, 0);
@@ -1036,6 +1043,9 @@ function apiMult_doSubclassWarrior2Action() {
 
 function apiMult_doSubclassWarrior2Ability1Action() {
   subclassName = SUBCLASS_WARRIOR_2_NAME;
+  cronCountKey = SUBCLASS_WARRIOR_2_ABILITY_CRON_COUNT_KEY;
+  totalUsageKey = SUBCLASS_WARRIOR_2_ABILITY_USAGE_KEY;
+  totalUsageMax = SUBCLASS_WARRIOR_2_ABILITY_USAGE_MAX;
   skillId = SUBCLASS_WARRIOR_2_ABILITY_1_ID;
   baseMpCost = SUBCLASS_WARRIOR_2_ABILITY_1_BASE_MP_COST;
   diceType = SUBCLASS_WARRIOR_2_ABILITY_1_DICE_TYPE;
@@ -1052,6 +1062,9 @@ function apiMult_doSubclassWarrior2Ability1Action() {
 
 function apiMult_doSubclassWarrior2Ability2Action() {
   subclassName = SUBCLASS_WARRIOR_2_NAME;
+  cronCountKey = SUBCLASS_WARRIOR_2_ABILITY_CRON_COUNT_KEY;
+  totalUsageKey = SUBCLASS_WARRIOR_2_ABILITY_USAGE_KEY;
+  totalUsageMax = SUBCLASS_WARRIOR_2_ABILITY_USAGE_MAX;
   skillId = SUBCLASS_WARRIOR_2_ABILITY_2_ID;
   baseMpCost = SUBCLASS_WARRIOR_2_ABILITY_2_BASE_MP_COST;
   diceType = SUBCLASS_WARRIOR_2_ABILITY_2_DICE_TYPE;
@@ -1103,13 +1116,16 @@ function apiMult_doSubclassWarrior4Action() {
 }
 
 function apiMult_doHpToRewardAction() {
+  var cronCount = Number(scriptProperties.getProperty(cronCountKey));
+  var totalHpPaid = Number(scriptProperties.getProperty(totalHpPaidKey));
+
   // Get equipment stats info
   apiFree_getContentInfo();
   
   // If new day, reset total HP paid counter
-  if (Number(scriptProperties.getProperty(cronCountKey)) != user.flags.cronCount) {
-    scriptProperties.setProperty(cronCountKey, user.flags.cronCount);
-    scriptProperties.setProperty(totalHpPaidKey, 0);
+  if (cronCount != user.flags.cronCount) {
+    cronCount = user.flags.cronCount;
+    totalHpPaid = 0;
   }
   
   // Compute total Constitution
@@ -1117,7 +1133,6 @@ function apiMult_doHpToRewardAction() {
   
   // Compute Health cost
   const hpCost = baseHpCost * (1 - (Math.min(con, SUBCLASS_ABILITY_CON_MAX) / SUBCLASS_ABILITY_CON_DIVISOR));
-  const totalHpPaid = Number(scriptProperties.getProperty(totalHpPaidKey));
   
   var messageFixed = "";
   var messageVar = "";
@@ -1126,11 +1141,11 @@ function apiMult_doHpToRewardAction() {
   var exp = user.stats.exp;
   var gp = user.stats.gp;
   
-  // If (Total HP paid for the day > totalHpPaidMax), send max HP paid reached message via notes
+  // If (total HP paid for the day > totalHpPaidMax), send max HP paid reached message via notes
   if (totalHpPaid >= totalHpPaidMax) {
-    messageFixed = MAX_HP_FAIL_NOTES;
+    messageFixed = MAX_TOTAL_HP_PAID_FAIL_NOTES;
   }
-  // If (Present HP - Health cost) < 1, send no HP message via notes
+  // If (present HP - Health cost) < 1, send no HP message via notes
   else if ((hp - hpCost) < 1) {
     messageFixed = NO_HP_FAIL_NOTES;
   }
@@ -1153,7 +1168,7 @@ function apiMult_doHpToRewardAction() {
     messageFixed += " = **" + rollSum + "** " + abilityStatReward + ". ";
     
     hp -= hpCost;
-    scriptProperties.setProperty(totalHpPaidKey, totalHpPaid + hpCost);
+    totalHpPaid += hpCost;
     
     switch (abilityStatReward) {
       case "Mana":
@@ -1193,13 +1208,29 @@ function apiMult_doHpToRewardAction() {
     else {
       messageVar = "Not bad...";
     }
+
+    if (totalHpPaid >= totalHpPaidMax) {
+      messageVar += "\n\n" + MAX_TOTAL_HP_PAID_FAIL_NOTES;
+    }
   }
   
   api_changeTask(UPDATE_MSG_BUTTON_ALIAS, {"notes" : messageFixed + messageVar});
   api_changeStats(hp, mp, exp, gp);
+
+  scriptProperties.setProperty(cronCountKey, cronCount);
+  scriptProperties.setProperty(totalHpPaidKey, totalHpPaid);
 }
 
 function apiMult_doMultiCastAction() {
+  var cronCount = Number(scriptProperties.getProperty(cronCountKey));
+  var totalUsage = Number(scriptProperties.getProperty(totalUsageKey));
+
+  // If new day, reset total HP paid counter
+  if (cronCount != user.flags.cronCount) {
+    cronCount = user.flags.cronCount;
+    totalUsage = 0;
+  }
+  
   const mpCost = baseMpCost;
   
   var messageFixed = "";
@@ -1209,18 +1240,26 @@ function apiMult_doMultiCastAction() {
   var exp = user.stats.exp;
   var gp = user.stats.gp;
   
-  // If Present MP < Mana cost, send no MP message via notes
-  if (mp < mpCost) {
+  // If (total usage for the day > totalUsageMax), send max usage reached message via notes
+  if (totalUsage >= totalUsageMax) {
+    messageFixed = MAX_USAGE_FAIL_NOTES;
+    api_forceSyncOnTaskScore();
+  }
+  // If present MP < Mana cost, send no MP message via notes
+  else if (mp < mpCost) {
     messageFixed = NO_MP_FAIL_NOTES;
+    api_forceSyncOnTaskScore();
   }
   else {
-    // Compute roll needed to triple-cast
+    // Compute roll needed to multicast
     const rollNeeded = diceType + 1 - (Math.ceil(abilityChancePercent * diceType / 100));
     const roll = Math.floor(Math.random() * diceType) + 1;
     
     messageFixed = "Need to roll ≥ " + rollNeeded + " to triple-cast.  \n You rolled " + roll + ". ";
-    
-    // If roll is below needed, send unsuccessful roll message via notes
+
+    totalUsage++;
+
+    // If roll is below needed, send unsuccessful roll message via notes and cast skill only once
     if (roll < rollNeeded) {
       if ((rollNeeded - roll) <= (0.1 * diceType)) {
         messageVar = "Almost got it!";
@@ -1235,7 +1274,7 @@ function apiMult_doMultiCastAction() {
       // Use skill just once
       api_useSkill(skillId);
     }
-    // else level up and send successful roll message via notes
+    // else send successful roll message via notes and multicast
     else {
       messageVar = "Excellent!!!";
       
@@ -1260,19 +1299,29 @@ function apiMult_doMultiCastAction() {
       api_useSkill(skillId);
       api_useSkill(skillId);
     }
+
+    if (totalUsage >= totalUsageMax) {
+      messageVar += "\n\n" + MAX_USAGE_FAIL_NOTES;
+    }
   }
 
   api_changeTask(UPDATE_MSG_BUTTON_ALIAS, {"notes" : messageFixed + messageVar});
+
+  scriptProperties.setProperty(cronCountKey, cronCount);
+  scriptProperties.setProperty(totalUsageKey, totalUsage);
 }
 
 function apiMult_doHpToRareRewardAction() {
+  var cronCount = Number(scriptProperties.getProperty(cronCountKey));
+  var totalHpPaid = Number(scriptProperties.getProperty(totalHpPaidKey));
+
   // Get equipment stats info
   apiFree_getContentInfo();
   
   // If new day, reset total HP paid counter
-  if (Number(scriptProperties.getProperty(cronCountKey)) != user.flags.cronCount) {
-    scriptProperties.setProperty(cronCountKey, user.flags.cronCount);
-    scriptProperties.setProperty(totalHpPaidKey, 0);
+  if (cronCount != user.flags.cronCount) {
+    cronCount = user.flags.cronCount;
+    totalHpPaid = 0;
   }
   
   // Compute total Constitution
@@ -1280,7 +1329,6 @@ function apiMult_doHpToRareRewardAction() {
   
   // Compute Health cost
   const hpCost = baseHpCost * (1 - (Math.min(con, SUBCLASS_ABILITY_CON_MAX) / SUBCLASS_ABILITY_CON_DIVISOR));
-  const totalHpPaid = Number(scriptProperties.getProperty(totalHpPaidKey));
   
   var messageFixed = "";
   var messageVar = "";
@@ -1289,11 +1337,11 @@ function apiMult_doHpToRareRewardAction() {
   var exp = user.stats.exp;
   var gp = user.stats.gp;
   
-  // If (Total HP paid for the day > totalHpPaidMax), send max HP paid reached message via notes
+  // If (total HP paid for the day > totalHpPaidMax), send max HP paid reached message via notes
   if (totalHpPaid >= totalHpPaidMax) {
-    messageFixed = MAX_HP_FAIL_NOTES;
+    messageFixed = MAX_TOTAL_HP_PAID_FAIL_NOTES;
   }
-  // If (Present HP - Health cost) < 1, send no HP message via notes
+  // If (present HP - Health cost) < 1, send no HP message via notes
   else if ((hp - hpCost) < 1) {
     messageFixed = NO_HP_FAIL_NOTES;
   }
@@ -1305,7 +1353,7 @@ function apiMult_doHpToRareRewardAction() {
     
     messageFixed = "Need to roll ≥ " + rollNeeded + " to level  up.  \n You rolled " + roll + ". ";
     hp -= hpCost;
-    scriptProperties.setProperty(totalHpPaidKey, totalHpPaid + hpCost);
+    totalHpPaid += hpCost;
     
     // If roll is below needed, send unsuccessful roll message via notes
     if (roll < rollNeeded) {
@@ -1339,10 +1387,17 @@ function apiMult_doHpToRareRewardAction() {
         }
       }
     }
+
+    if (totalHpPaid >= totalHpPaidMax) {
+      messageVar += "\n\n" + MAX_TOTAL_HP_PAID_FAIL_NOTES;
+    }
   }
   
   api_changeTask(UPDATE_MSG_BUTTON_ALIAS, {"notes" : messageFixed + messageVar});
   api_changeStats(hp, mp, exp, gp);
+
+  scriptProperties.setProperty(cronCountKey, cronCount);
+  scriptProperties.setProperty(totalHpPaidKey, totalHpPaid);
 }
 
 function apiFree_getContentInfo() {
