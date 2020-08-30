@@ -1156,11 +1156,11 @@ function apiMult_doHpToRewardAction() {
     scriptProperties.setProperty(totalHpPaidKey, totalHpPaid + hpCost);
     
     switch (abilityStatReward) {
-      case "mana":
+      case "Mana":
         mp += rollSum;
         break;
         
-      case "gold":
+      case "Gold":
         gp += rollSum;
         break;
     }
