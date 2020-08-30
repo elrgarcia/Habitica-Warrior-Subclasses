@@ -36,13 +36,6 @@ const FAIL_RETRY_AFTER_WAIT_MSG_PART_1 = "**ERROR: Script Failed. Retry later.**
     + "**Recommendation**: Please wait for ";
 const FAIL_RETRY_AFTER_WAIT_MSG_PART_2 = " second(s), then try again"
 
-const FAIL_RETRY_NOW_MSG = "**ERROR: Script Failed. Retry now.**  \n\n"
-    + "**Script Name**: " + SCRIPT_NAME + "  \n"
-    + "**Reason**: Exceeded [rate limit](https://habitica.fandom.com/wiki/User_blog:LadyAlys/Rate_Limiting_(Intentional_Slow-Downs)_in_Some_Third-Party_Tools)  \n"
-    + "**Recommendation**: Please avoid manually triggering scripts too quickly, or triggering a different script while another one is not yet finished running. By the time you receive this message, it should now be okay to manually trigger scripts again.";
-
-var scriptLocked = Number(scriptProperties.getProperty("scriptLocked"));
-
 // Subclass
 const LVL_FOR_SUBCLASS = 60.0;
 
@@ -240,42 +233,30 @@ var anyTaskCount = Number(scriptProperties.getProperty("anyTaskCount"));
 var state = Number(scriptProperties.getProperty("state"));
 var lastMsgState = Number(scriptProperties.getProperty("lastMsgState"));
 var npcAwake = Number(scriptProperties.getProperty("npcAwake"));
+var prevTaskAlias = scriptProperties.getProperty("prevTaskAlias");
 
 function doOneTimeSetup() {
-  if (!scriptLocked) {
-    // Get response from repeatable function to see remaining requests
-    const response = api_getUserInfo("stats"); // Dummy read just to get number of remaining requests
-    const respHeaders = response.getAllHeaders();
-    const remainingReq = Number(respHeaders["x-ratelimit-remaining"]);
-    const resetDateTime = new Date(respHeaders["x-ratelimit-reset"]);
-    const dateNow = new Date();
-    const retryAfterMs = Math.max(0, resetDateTime - dateNow) + RETRY_AFTER_OFFSET_MS;
-    const retryAfterSec = Math.ceil(retryAfterMs / 1000);
-    
-    // If remaining requests <= 0, lock script, then after delay send retry now message and unlock script
-    if (remainingReq <= 0) {
-      // Lock script
-      scriptLocked = 1;
-      scriptProperties.setProperty("scriptLocked", scriptLocked);
-      
-      // Set trigger to unlock script and send retry now message after a delay
-      ScriptApp.newTrigger("api_sendFailRetryNowMessageAndUnlockScript").timeBased().after(retryAfterMs).create();
+  // Get response from repeatable function to see remaining requests
+  const response = api_getUserInfo("stats"); // Dummy read just to get number of remaining requests
+  const respHeaders = response.getAllHeaders();
+  const remainingReq = Number(respHeaders["x-ratelimit-remaining"]);
+  const resetDateTime = new Date(respHeaders["x-ratelimit-reset"]);
+  const dateNow = new Date();
+  const retryAfterMs = Math.max(0, resetDateTime - dateNow) + RETRY_AFTER_OFFSET_MS;
+  const retryAfterSec = Math.ceil(retryAfterMs / 1000);
+  const requestsNeeded = 3;
+  
+  // If remaining requests not enough, send message now to retry after waiting
+  if (remainingReq < requestsNeeded) {
+    if (remainingReq >= 1) {
+      api_sendPrivateMessage(FAIL_RETRY_AFTER_WAIT_MSG_PART_1 + retryAfterSec + FAIL_RETRY_AFTER_WAIT_MSG_PART_2, USER_ID);
     }
-    // Else check requests needed
-    else {
-      const requestsNeeded = 3;
-
-      // If remaining requests not enough, send message now to retry after waiting
-      if (remainingReq < requestsNeeded) {
-        api_sendPrivateMessage(FAIL_RETRY_AFTER_WAIT_MSG_PART_1 + retryAfterSec + FAIL_RETRY_AFTER_WAIT_MSG_PART_2, USER_ID);
-      }
-      // Else, continue with normal operation
-      else {
-        api_createRewardTasks();
-        apiMult_createWebhookNoDuplicates(SCRIPT_NAME + " Webhook", "taskActivity", {"created" : true, "scored" : true});
-        initScriptProperties();
-      }
-    }
+  }
+  // Else, continue with normal operation
+  else {
+    api_createRewardTasks();
+    apiMult_createWebhookNoDuplicates(SCRIPT_NAME + " Webhook", "taskActivity", {"created" : true, "scored" : true}); // 2 API calls max
+    initScriptProperties();
   }
 }
 
@@ -291,78 +272,72 @@ function doPost(e) {
     if ((anyTaskCount >= ANY_TASK_COUNT_MAX) || (task.type == "reward")) {
       anyTaskCount = 0;
 
-      if (!scriptLocked) {
-        // Get response from repeatable function to see remaining requests
-        const response = api_getUserInfo("preferences.disableClasses,stats,items.gear.equipped,profile.name,flags.cronCount");
-        const respHeaders = response.getAllHeaders();
-        const remainingReq = Number(respHeaders["x-ratelimit-remaining"]);
-        const resetDateTime = new Date(respHeaders["x-ratelimit-reset"]);
-        const dateNow = new Date();
-        const retryAfterMs = Math.max(0, resetDateTime - dateNow) + RETRY_AFTER_OFFSET_MS;
-        const retryAfterSec = Math.ceil(retryAfterMs / 1000);
-        
-        // If remaining requests <= 0, lock script, then after delay send retry now message and unlock script
-        if (remainingReq <= 0) {
-          // Lock script
-          scriptLocked = 1;
-          scriptProperties.setProperty("scriptLocked", scriptLocked);
-          
-          // Set trigger to unlock script and send retry now message after a delay
-          ScriptApp.newTrigger("api_sendFailRetryNowMessageAndUnlockScript").timeBased().after(retryAfterMs).create();
+      // Get response from repeatable function to see remaining requests
+      const response = api_getUserInfo("preferences.disableClasses,stats,items.gear.equipped,profile.name,flags.cronCount");
+      const respHeaders = response.getAllHeaders();
+      const remainingReq = Number(respHeaders["x-ratelimit-remaining"]);
+      const resetDateTime = new Date(respHeaders["x-ratelimit-reset"]);
+      const dateNow = new Date();
+      const retryAfterMs = Math.max(0, resetDateTime - dateNow) + RETRY_AFTER_OFFSET_MS;
+      const retryAfterSec = Math.ceil(retryAfterMs / 1000);
+      const requestsNeeded = 6;
+      
+      // If remaining requests not enough, send message now to retry after waiting
+      if (remainingReq < requestsNeeded) {
+        if (remainingReq >= 1) {
+          api_sendPrivateMessage(FAIL_RETRY_AFTER_WAIT_MSG_PART_1 + retryAfterSec + FAIL_RETRY_AFTER_WAIT_MSG_PART_2, USER_ID);
         }
-        // Else check requests needed
-        else {
-          const requestsNeeded = 6;
-          
-          // If remaining requests not enough, send message now to retry after waiting
-          if (remainingReq < requestsNeeded) {
-            api_sendPrivateMessage(FAIL_RETRY_AFTER_WAIT_MSG_PART_1 + retryAfterSec + FAIL_RETRY_AFTER_WAIT_MSG_PART_2, USER_ID);
+      }
+      // Else, continue with normal operation
+      else {
+        const prevState = state;
+        
+        apiMult_doStateTransitions(prevState, task, type); // Max of 4 API calls when leaving SUBCLASS_ACTIVE state. Othwerwise, 0 API calls.
+        apiMult_doStateActions(prevState, task); // Max of 5 API calls when entering SUBCLASS_ACTIVE state. Otherwise, just 2 API calls max.
+        
+        // Save properties that need to be carried over to the next script execution
+        scriptProperties.setProperty("state", state);
+        scriptProperties.setProperty("lastMsgState", lastMsgState);
+        
+        if (task.alias == UPDATE_MSG_BUTTON_ALIAS) {
+          if (prevTaskAlias == UPDATE_MSG_BUTTON_ALIAS) {
+            api_forceSyncOnTaskScore();
           }
-          // Else, continue with normal operation
-          else {
-            const prevState = state;
-            
-            apiMult_doStateTransitions(prevState, task, type); // Max of 4 API calls when leaving SUBCLASS_ACTIVE state. Othwerwise, 0 API calls.
-            apiMult_doStateActions(prevState, task); // Max of 5 API calls when entering SUBCLASS_ACTIVE state. Otherwise, just 2 API calls max.
-            
-            // Save properties that need to be carried over to the next script execution
-            scriptProperties.setProperty("state", state);
-            scriptProperties.setProperty("lastMsgState", lastMsgState);
-            scriptProperties.setProperty("npcAwake", npcAwake);
-            
-            if ((task.type == "reward") && (state == STATES.SUBCLASS_ACTIVE)) {
-              switch (task.alias) {
-                case SUBCLASS_WARRIOR_1_ALIAS:
-                  apiMult_doSubclassWarrior1Action(); // Max of 3 API calls
-                  break;
-                  
-                case SUBCLASS_WARRIOR_2_ALIAS:
-                  apiMult_doSubclassWarrior2Action(); // 2 API calls
-                  break;
-                  
-                case SUBCLASS_WARRIOR_2_ABILITY_1_ALIAS:
-                  apiMult_doSubclassWarrior2Ability1Action(); // Max of 6 API calls
-                  break;
-                  
-                case SUBCLASS_WARRIOR_2_ABILITY_2_ALIAS:
-                  apiMult_doSubclassWarrior2Ability2Action(); // Max of 6 API calls
-                  break;
-                  
-                case SUBCLASS_WARRIOR_3_ALIAS:
-                  apiMult_doSubclassWarrior3Action(); // Max of 3 API calls
-                  break;
-                  
-                case SUBCLASS_WARRIOR_4_ALIAS:
-                  apiMult_doSubclassWarrior4Action(); // Max of 3 API calls
-                  break;
-              }
-            }
+        }
+        else if ((task.type == "reward") && (state == STATES.SUBCLASS_ACTIVE)) {
+          switch (task.alias) {
+            case SUBCLASS_WARRIOR_1_ALIAS:
+              apiMult_doSubclassWarrior1Action(); // 3 API calls max
+              break;
+              
+            case SUBCLASS_WARRIOR_2_ALIAS:
+              apiMult_doSubclassWarrior2Action(); // 2 API calls always
+              break;
+              
+            case SUBCLASS_WARRIOR_2_ABILITY_1_ALIAS:
+              apiMult_doSubclassWarrior2Ability1Action(); // 6 API calls max
+              break;
+              
+            case SUBCLASS_WARRIOR_2_ABILITY_2_ALIAS:
+              apiMult_doSubclassWarrior2Ability2Action(); // 6 API calls max
+              break;
+              
+            case SUBCLASS_WARRIOR_3_ALIAS:
+              apiMult_doSubclassWarrior3Action(); // 3 API calls max
+              break;
+              
+            case SUBCLASS_WARRIOR_4_ALIAS:
+              apiMult_doSubclassWarrior4Action(); // 3 API calls max
+              break;
           }
         }
       }
     }
 
+    prevTaskAlias = task.alias;
+
     scriptProperties.setProperty("anyTaskCount", anyTaskCount);
+    scriptProperties.setProperty("prevTaskAlias", prevTaskAlias);
   }
 
   return HtmlService.createHtmlOutput();
@@ -383,38 +358,6 @@ function api_getUserInfo(userFields) {
   const response = UrlFetchApp.fetch(url, params);
   user = JSON.parse(response).data;
   return response;
-}
-
-function api_sendFailRetryNowMessageAndUnlockScript() {
-  deleteTriggers("api_sendFailRetryNowMessageAndUnlockScript");
-
-  var remainingReq = 0;
-  var retryAfterMs = 0;
-  
-  while (remainingReq <= 0) {
-    Utilities.sleep(retryAfterMs);
-    
-    var response = api_sendPrivateMessage(FAIL_RETRY_NOW_MSG, USER_ID);
-    var respHeaders = response.getAllHeaders();
-    remainingReq = Number(respHeaders["x-ratelimit-remaining"]);
-    var resetDateTime = new Date(respHeaders["x-ratelimit-reset"]);
-    var dateNow = new Date();
-    retryAfterMs = Math.max(0, resetDateTime - dateNow) + RETRY_AFTER_OFFSET_MS;
-  }
-
-  scriptLocked = 0;
-  scriptProperties.setProperty("scriptLocked", scriptLocked);
-}
-
-function deleteTriggers(functionName) {
-  // Delete triggers to functionName to avoid reaching the maximum number of triggers
-  const triggers = ScriptApp.getProjectTriggers();
-
-  for (var i in triggers) {
-    if (triggers[i].getHandlerFunction() == functionName) {
-      ScriptApp.deleteTrigger(triggers[i])
-    }
-  }
 }
 
 function api_sendPrivateMessage(message, toUserId) {
