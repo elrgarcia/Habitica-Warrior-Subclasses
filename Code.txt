@@ -232,7 +232,6 @@ const ALL_SCRIPT_BUTTONS_ALIASES = [UPDATE_MSG_BUTTON_ALIAS, THE_LOST_CLASSERMAS
 var anyTaskCount = Number(scriptProperties.getProperty("anyTaskCount"));
 var state = Number(scriptProperties.getProperty("state"));
 var lastMsgState = Number(scriptProperties.getProperty("lastMsgState"));
-var npcAwake = Number(scriptProperties.getProperty("npcAwake"));
 var prevTaskAlias = scriptProperties.getProperty("prevTaskAlias");
 
 function doOneTimeSetup() {
@@ -589,7 +588,6 @@ function apiMult_doStateActions(prevState, task) {
       if (state != prevState) {
         lastMsgState = STATES.WELCOME;
         text += THE_LOST_CLASSERMASTER_BUTTON_TEXT_AWAKE;
-        npcAwake = 1;
       }
       
       break;
@@ -598,18 +596,14 @@ function apiMult_doStateActions(prevState, task) {
       // entry / setAwakeNpc();
       if (state != prevState) {
         text += THE_LOST_CLASSERMASTER_BUTTON_TEXT_AWAKE;
-        npcAwake = 1;
       }
 
-      // talkedToNpc / if lastMsgState == NO_CLASS {if npcAwake {appendMsg(NO_CLASS_MSG); sendMsg(); setSleepNpc();}}
+      // talkedToNpc / if lastMsgState == NO_CLASS {appendMsg(NO_CLASS_MSG); sendMsg(); setSleepNpc();}
       // else {appendPreMsg(lastMsgState); appendMsg(NO_CLASS_MSG); sendMsg(); lastMsgState = NO_CLASS;}
       if (task.alias == THE_LOST_CLASSERMASTER_BUTTON_ALIAS) {
         if (lastMsgState == state) {
-          if (npcAwake) {
-            text += THE_LOST_CLASSERMASTER_BUTTON_TEXT_ASLEEP;
-            notes += HEADER_3_PREFIX + NO_CLASS_MSG;
-            npcAwake = 0;
-          }
+          text += THE_LOST_CLASSERMASTER_BUTTON_TEXT_ASLEEP;
+          notes += HEADER_3_PREFIX + NO_CLASS_MSG;
         }
         else {
           notes += HEADER_3_PREFIX;
@@ -647,18 +641,14 @@ function apiMult_doStateActions(prevState, task) {
       // entry / setAwakeNpc();
       if (state != prevState) {
         text += THE_LOST_CLASSERMASTER_BUTTON_TEXT_AWAKE;
-        npcAwake = 1;
       }
 
-      // talkedToNpc / if lastMsgState == BELOW_LVL_60 {if npcAwake {appendMsg(BELOW_LVL_60_MSG); sendMsg(); setSleepNpc();}}
+      // talkedToNpc / if lastMsgState == BELOW_LVL_60 {appendMsg(BELOW_LVL_60_MSG); sendMsg(); setSleepNpc();}
       //   else {appendPreMsg(lastMsgState); appendMsg(BELOW_LVL_60_MSG); sendMsg(); lastMsgState = BELOW_LVL_60;}
       if (task.alias == THE_LOST_CLASSERMASTER_BUTTON_ALIAS) {
         if (lastMsgState == state) {
-          if (npcAwake) {
-            text += THE_LOST_CLASSERMASTER_BUTTON_TEXT_ASLEEP;
-            notes += HEADER_3_PREFIX + BELOW_LVL_60_MSG;
-            npcAwake = 0;
-          }
+          text += THE_LOST_CLASSERMASTER_BUTTON_TEXT_ASLEEP;
+          notes += HEADER_3_PREFIX + BELOW_LVL_60_MSG;
         }
         else {
           notes += HEADER_3_PREFIX;
@@ -692,7 +682,6 @@ function apiMult_doStateActions(prevState, task) {
       // entry / setAwakeNpc();
       if (state != prevState) {
         text += THE_LOST_CLASSERMASTER_BUTTON_TEXT_AWAKE;
-        npcAwake = 1;
       }
 
       // talkedToNpc / if lastMsgState == LVL_60_ABOVE {appendMsg(LVL_60_ABOVE_MSG_2); sendMsg();}
@@ -730,15 +719,12 @@ function apiMult_doStateActions(prevState, task) {
         api_deleteTask(task._id);
       }
 
-      // talkedToNpc or justSelectedSubclass / if lastMsgState == SUBCLASS_ACTIVE {if npcAwake {appendMsg(SUBCLASS_ACTIVE_MSG); sendMsg(); setSleepNpc();}}
+      // talkedToNpc or justSelectedSubclass / if lastMsgState == SUBCLASS_ACTIVE {appendMsg(SUBCLASS_ACTIVE_MSG); sendMsg(); setSleepNpc();}
       // else {appendPreMsg(lastMsgState); appendMsg(SUBCLASS_ACTIVE_MSG); sendMsg(); lastMsgState = SUBCLASS_ACTIVE;
       if ((task.alias == THE_LOST_CLASSERMASTER_BUTTON_ALIAS) || (state != prevState)) {
         if (lastMsgState == state) {
-          if (npcAwake) {
-            text += THE_LOST_CLASSERMASTER_BUTTON_TEXT_ASLEEP;
-            notes += HEADER_3_PREFIX + SUBCLASS_ACTIVE_MSG;
-            npcAwake = 0;
-          }
+          text += THE_LOST_CLASSERMASTER_BUTTON_TEXT_ASLEEP;
+          notes += HEADER_3_PREFIX + SUBCLASS_ACTIVE_MSG;
         }
         else {
           notes += HEADER_3_PREFIX;
@@ -779,18 +765,14 @@ function apiMult_doStateActions(prevState, task) {
       // entry / setAwakeNpc();
       if (state != prevState) {
         text += THE_LOST_CLASSERMASTER_BUTTON_TEXT_AWAKE;
-        npcAwake = 1;
       }
 
-      // talkedToNpc / if lastMsgState == NON_WARRIOR {if npcAwake {appendMsg(NON_WARRIOR_MSG); sendMsg(); setSleepNpc();}}
+      // talkedToNpc / if lastMsgState == NON_WARRIOR {appendMsg(NON_WARRIOR_MSG); sendMsg(); setSleepNpc();}
       //   else {appendPreMsg(lastMsgState); appendMsg(NON_WARRIOR_MSG); sendMsg(); lastMsgState = NON_WARRIOR;}
       if (task.alias == THE_LOST_CLASSERMASTER_BUTTON_ALIAS) {
         if (lastMsgState == state) {
-          if (npcAwake) {
-            text += THE_LOST_CLASSERMASTER_BUTTON_TEXT_ASLEEP;
-            notes += HEADER_3_PREFIX + NON_WARRIOR_MSG;
-            npcAwake = 0;
-          }
+          text += THE_LOST_CLASSERMASTER_BUTTON_TEXT_ASLEEP;
+          notes += HEADER_3_PREFIX + NON_WARRIOR_MSG;
         }
         else {
           notes += HEADER_3_PREFIX;
