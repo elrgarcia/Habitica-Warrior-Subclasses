@@ -30,11 +30,11 @@ const scriptProperties = PropertiesService.getScriptProperties(); // Constants c
 // Rate Limit Check
 const RETRY_AFTER_OFFSET_MS = 1000;
 
-const FAIL_RETRY_AFTER_WAIT_MSG_PART_1 = "**ERROR: Script Failed. Retry later.**  \n\n"
+const FAIL_RETRY_AFTER_WAIT_MSG_PART_1 = "**ERROR: Too many requests. Retry after ";
+const FAIL_RETRY_AFTER_WAIT_MSG_PART_2 = " second(s)**\n\n"
     + "**Script Name**: " + SCRIPT_NAME + "  \n"
-    + "**Reason**: Number of server requests needed to complete script operation will exceed [rate limit](https://habitica.fandom.com/wiki/User_blog:LadyAlys/Rate_Limiting_(Intentional_Slow-Downs)_in_Some_Third-Party_Tools)  \n"
-    + "**Recommendation**: Please wait for ";
-const FAIL_RETRY_AFTER_WAIT_MSG_PART_2 = " second(s), then try again"
+    + "**Reason**: Number of Habitica requests needed to complete the script operation will exceed the [rate limit](https://habitica.fandom.com/wiki/User_blog:LadyAlys/Rate_Limiting_(Intentional_Slow-Downs)_in_Some_Third-Party_Tools)  \n"
+    + "**Recommendation**: Please avoid manually triggering scripts too quickly. Also avoid triggering a different script while another one is not yet finished running.";
 
 // Subclass
 const LVL_FOR_SUBCLASS = 60.0;
