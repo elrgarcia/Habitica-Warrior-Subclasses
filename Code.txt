@@ -236,7 +236,7 @@ var prevTaskAlias = scriptProperties.getProperty("prevTaskAlias");
 
 function doOneTimeSetup() {
   // Get response from repeatable function to see remaining requests
-  const response = api_getUserInfo("stats"); // Dummy read just to get number of remaining requests
+  const response = api_getAuthenticatedUserProfile("stats"); // Dummy read just to get number of remaining requests
   const respHeaders = response.getAllHeaders();
   const remainingReq = Number(respHeaders["x-ratelimit-remaining"]);
   const resetDateTime = new Date(respHeaders["x-ratelimit-reset"]);
@@ -248,13 +248,40 @@ function doOneTimeSetup() {
   // If remaining requests not enough, send message now to retry after waiting
   if (remainingReq < requestsNeeded) {
     if (remainingReq >= 1) {
-      api_sendPrivateMessage(FAIL_RETRY_AFTER_WAIT_MSG_PART_1 + retryAfterSec + FAIL_RETRY_AFTER_WAIT_MSG_PART_2, USER_ID);
+      api_sendPrivateMessage({"message" : FAIL_RETRY_AFTER_WAIT_MSG_PART_1 + retryAfterSec + FAIL_RETRY_AFTER_WAIT_MSG_PART_2, "toUserId" : USER_ID});
     }
   }
   // Else, continue with normal operation
   else {
-    api_createRewardTasks();
-    apiMult_createWebhookNoDuplicates(SCRIPT_NAME + " Webhook", "taskActivity", {"created" : true, "scored" : true}); // 2 API calls max
+    const updateMessageButton = {
+      "text" : UPDATE_MSG_BUTTON_TEXT,
+      "type" : "reward",
+      "alias" : UPDATE_MSG_BUTTON_ALIAS,
+      "notes" : UPDATE_MSG_BUTTON_NOTES,
+    }
+    
+    const theLostClassermasterButton = {
+      "text" : THE_LOST_CLASSERMASTER_BUTTON_TEXT_AWAKE,
+      "type" : "reward",
+      "alias" : THE_LOST_CLASSERMASTER_BUTTON_ALIAS,
+      "notes" : THE_LOST_CLASSERMASTER_BUTTON_NOTES,
+    }
+
+    api_createNewTaskForUser([theLostClassermasterButton, updateMessageButton]);
+
+    const options = {
+      "created" : true,
+      "scored" : true,
+    }
+
+    const payload = {
+      "url" : WEB_APP_URL,
+      "label" : SCRIPT_NAME + " Webhook",
+      "type" : "taskActivity",
+      "options" : options,
+    }
+
+    apiMult_createNewWebhookNoDuplicates(payload); // 2 API calls max
     initScriptProperties();
   }
 }
@@ -272,7 +299,7 @@ function doPost(e) {
       anyTaskCount = 0;
 
       // Get response from repeatable function to see remaining requests
-      const response = api_getUserInfo("preferences.disableClasses,stats,items.gear.equipped,profile.name,flags.cronCount");
+      const response = api_getAuthenticatedUserProfile("preferences.disableClasses,stats,items.gear.equipped,profile.name,flags.cronCount");
       const respHeaders = response.getAllHeaders();
       const remainingReq = Number(respHeaders["x-ratelimit-remaining"]);
       const resetDateTime = new Date(respHeaders["x-ratelimit-reset"]);
@@ -284,13 +311,15 @@ function doPost(e) {
       // If remaining requests not enough, send message now to retry after waiting
       if (remainingReq < requestsNeeded) {
         if (remainingReq >= 1) {
-          api_sendPrivateMessage(FAIL_RETRY_AFTER_WAIT_MSG_PART_1 + retryAfterSec + FAIL_RETRY_AFTER_WAIT_MSG_PART_2, USER_ID);
+          api_sendPrivateMessage({"message" : FAIL_RETRY_AFTER_WAIT_MSG_PART_1 + retryAfterSec + FAIL_RETRY_AFTER_WAIT_MSG_PART_2, "toUserId" : USER_ID});
         }
       }
       // Else, continue with normal operation
       else {
         const prevState = state;
-        
+
+        user = JSON.parse(response).data;
+
         apiMult_doStateTransitions(prevState, task, type); // Max of 4 API calls when leaving SUBCLASS_ACTIVE state. Othwerwise, 0 API calls.
         apiMult_doStateActions(prevState, task); // Max of 5 API calls when entering SUBCLASS_ACTIVE state. Otherwise, just 2 API calls max.
         
@@ -342,7 +371,7 @@ function doPost(e) {
   return HtmlService.createHtmlOutput();
 }
 
-function api_getUserInfo(userFields) {
+function api_getAuthenticatedUserProfile(userFields) {
   const params = {
     "method" : "get",
     "headers" : HEADERS,
@@ -354,17 +383,10 @@ function api_getUserInfo(userFields) {
     url += "?userFields=" + userFields;
   }
 
-  const response = UrlFetchApp.fetch(url, params);
-  user = JSON.parse(response).data;
-  return response;
+  return UrlFetchApp.fetch(url, params);
 }
 
-function api_sendPrivateMessage(message, toUserId) {
-  const payload = {
-    "message" : message,
-    "toUserId" : toUserId,
-  }
-  
+function api_sendPrivateMessage(payload) {
   const params = {
     "method" : "post",
     "headers" : HEADERS,
@@ -377,26 +399,12 @@ function api_sendPrivateMessage(message, toUserId) {
   return UrlFetchApp.fetch(url, params);
 }
 
-function api_createRewardTasks() {
-  const updateMessageButton = {
-    "text" : UPDATE_MSG_BUTTON_TEXT,
-    "type" : "reward",
-    "alias" : UPDATE_MSG_BUTTON_ALIAS,
-    "notes" : UPDATE_MSG_BUTTON_NOTES,
-  }
-
-  const theLostClassermasterButton = {
-    "text" : THE_LOST_CLASSERMASTER_BUTTON_TEXT_AWAKE,
-    "type" : "reward",
-    "alias" : THE_LOST_CLASSERMASTER_BUTTON_ALIAS,
-    "notes" : THE_LOST_CLASSERMASTER_BUTTON_NOTES,
-  }
-
+function api_createNewTaskForUser(payload) {
   const params = {
     "method" : "post",
     "headers" : HEADERS,
     "contentType" : "application/json",
-    "payload" : JSON.stringify([theLostClassermasterButton, updateMessageButton]), // Rightmost button goes on top
+    "payload" : JSON.stringify(payload), // Rightmost button goes on top
     "muteHttpExceptions" : true,
   }
 
@@ -404,19 +412,19 @@ function api_createRewardTasks() {
   return UrlFetchApp.fetch(url, params);
 }
 
-function apiMult_createWebhookNoDuplicates(label, type, options) {
+function apiMult_createNewWebhookNoDuplicates(payload) {
   const response = api_getWebhooks();
   const webhooks = JSON.parse(response).data;
   var duplicateExists = 0;
 
   for (var i in webhooks) {
-    if (webhooks[i].label == label) {
+    if (webhooks[i].label == payload.label) {
       duplicateExists = 1;
     }
   }
   // If webhook to be created doesn't exist yet
   if (!duplicateExists) {
-    api_createWebhook(label, type, options);
+    api_createNewWebhook(payload);
   }
 }
 
@@ -431,14 +439,7 @@ function api_getWebhooks() {
   return UrlFetchApp.fetch(url, params);
 }
 
-function api_createWebhook(label, type, options) {
-  const payload = {
-    "url" : WEB_APP_URL,
-    "label" : label,
-    "type" : type,
-    "options" : options,
-  }
-
+function api_createNewWebhook(payload) {
   const params = {
     "method" : "post",
     "headers" : HEADERS,
@@ -715,7 +716,7 @@ function apiMult_doStateActions(prevState, task) {
       // entry / createSubclassButtons(); moveUpdateMsgToTop(); deleteSubclassChoiceTask();
       if (state != prevState) {
         api_createSubclassButtons(task.text);
-        api_moveTask(UPDATE_MSG_BUTTON_ALIAS, 0); // Position 0 = top of list
+        api_moveTaskToNewPosition(UPDATE_MSG_BUTTON_ALIAS, 0); // Position 0 = top of list
         api_deleteTask(task._id);
       }
 
@@ -804,22 +805,22 @@ function apiMult_doStateActions(prevState, task) {
   // Update task button if needed
   if (text != "") {
     if (notes != "") {
-      api_changeTask(THE_LOST_CLASSERMASTER_BUTTON_ALIAS, {"text" : text, "notes" : notes});
-      api_forceSyncOnTaskScore();
+      api_updateTask(THE_LOST_CLASSERMASTER_BUTTON_ALIAS, {"text" : text, "notes" : notes});
+      api_updateUser({"stats.training.con" : user.stats.training.con}); // Used to force sync next time a task is scored. To force sync a stat must be written to. Writing on a usually unused stat value.
     }
     else {
-      api_changeTask(THE_LOST_CLASSERMASTER_BUTTON_ALIAS, {"text" : text});
-      api_forceSyncOnTaskScore();
+      api_updateTask(THE_LOST_CLASSERMASTER_BUTTON_ALIAS, {"text" : text});
+      api_updateUser({"stats.training.con" : user.stats.training.con}); // Used to force sync next time a task is scored. To force sync a stat must be written to. Writing on a usually unused stat value.
     }
   }
   else if (notes != "") {
-    api_changeTask(THE_LOST_CLASSERMASTER_BUTTON_ALIAS, {"notes" : notes});
-    api_forceSyncOnTaskScore();
+    api_updateTask(THE_LOST_CLASSERMASTER_BUTTON_ALIAS, {"notes" : notes});
+    api_updateUser({"stats.training.con" : user.stats.training.con}); // Used to force sync next time a task is scored. To force sync a stat must be written to. Writing on a usually unused stat value.
   }
 }
 
 function apiMult_deleteSubclassButtons() {
-  const response = api_getTasks("rewards");
+  const response = api_getUserTasks("rewards");
   const rewardTasks = JSON.parse(response).data;
 
   // Delete tasks with aliases matching known subclass buttons
@@ -830,7 +831,7 @@ function apiMult_deleteSubclassButtons() {
   }
 }
 
-function api_getTasks(type) {
+function api_getUserTasks(type) {
   const params = {
     "method" : "get",
     "headers" : HEADERS,
@@ -845,14 +846,14 @@ function api_getTasks(type) {
   return UrlFetchApp.fetch(url, params);
 }
 
-function api_deleteTask(idOrAlias) {
+function api_deleteTask(taskIdOrAlias) {
   const params = {
     "method" : "delete",
     "headers" : HEADERS,
     "muteHttpExceptions" : true,
   }
   
-  var url = "https://habitica.com/api/v3/tasks/" + idOrAlias; 
+  var url = "https://habitica.com/api/v3/tasks/" + taskIdOrAlias; 
   return UrlFetchApp.fetch(url, params);
 }
 
@@ -918,27 +919,18 @@ function api_createSubclassButtons(taskText) {
       subclassButtons = [subclassWarrior4Button];
       break;
   }
-  
-  const params = {
-    "method" : "post",
-    "headers" : HEADERS,
-    "contentType" : "application/json",
-    "payload" : JSON.stringify(subclassButtons),
-    "muteHttpExceptions" : true,
-  }
 
-  const url = "https://habitica.com/api/v3/tasks/user";
-  return UrlFetchApp.fetch(url, params);
+  api_createNewTaskForUser(subclassButtons);
 }
 
-function api_moveTask(idOrAlias, position) {
+function api_moveTaskToNewPosition(taskIdOrAlias, position) {
   const params = {
     "method" : "post",
     "headers" : HEADERS,
     "muteHttpExceptions" : true,
   }
   
-  const url = "https://habitica.com/api/v3/tasks/" + idOrAlias + "/move/to/" + position;
+  const url = "https://habitica.com/api/v3/tasks/" + taskIdOrAlias + "/move/to/" + position;
   return UrlFetchApp.fetch(url, params);  
 }
 
@@ -962,8 +954,8 @@ function apiMult_doSubclassWarrior1Action() {
 }
 
 function apiMult_doSubclassWarrior2Action() {
-  api_changeTask(UPDATE_MSG_BUTTON_ALIAS, {"notes" : SUBCLASS_WARRIOR_2_ABILITY_MSG});
-  api_forceSyncOnTaskScore();
+  api_updateTask(UPDATE_MSG_BUTTON_ALIAS, {"notes" : SUBCLASS_WARRIOR_2_ABILITY_MSG});
+  api_updateUser({"stats.training.con" : user.stats.training.con}); // Used to force sync next time a task is scored. To force sync a stat must be written to. Writing on a usually unused stat value.
 }
 
 function apiMult_doSubclassWarrior2Ability1Action() {
@@ -971,7 +963,7 @@ function apiMult_doSubclassWarrior2Ability1Action() {
   cronCountKey = SUBCLASS_WARRIOR_2_ABILITY_CRON_COUNT_KEY;
   totalUsageKey = SUBCLASS_WARRIOR_2_ABILITY_USAGE_KEY;
   totalUsageMax = SUBCLASS_WARRIOR_2_ABILITY_USAGE_MAX;
-  skillId = SUBCLASS_WARRIOR_2_ABILITY_1_ID;
+  spellId = SUBCLASS_WARRIOR_2_ABILITY_1_ID;
   baseMpCost = SUBCLASS_WARRIOR_2_ABILITY_1_BASE_MP_COST;
   diceType = SUBCLASS_WARRIOR_2_ABILITY_1_DICE_TYPE;
   abilityChancePercent = SUBCLASS_WARRIOR_2_ABILITY_CHANCE_PERCENT;
@@ -990,7 +982,7 @@ function apiMult_doSubclassWarrior2Ability2Action() {
   cronCountKey = SUBCLASS_WARRIOR_2_ABILITY_CRON_COUNT_KEY;
   totalUsageKey = SUBCLASS_WARRIOR_2_ABILITY_USAGE_KEY;
   totalUsageMax = SUBCLASS_WARRIOR_2_ABILITY_USAGE_MAX;
-  skillId = SUBCLASS_WARRIOR_2_ABILITY_2_ID;
+  spellId = SUBCLASS_WARRIOR_2_ABILITY_2_ID;
   baseMpCost = SUBCLASS_WARRIOR_2_ABILITY_2_BASE_MP_COST;
   diceType = SUBCLASS_WARRIOR_2_ABILITY_2_DICE_TYPE;
   abilityChancePercent = SUBCLASS_WARRIOR_2_ABILITY_CHANCE_PERCENT;
@@ -1045,7 +1037,8 @@ function apiMult_doHpToRewardAction() {
   var totalHpPaid = Number(scriptProperties.getProperty(totalHpPaidKey));
 
   // Get equipment stats info
-  apiFree_getContentInfo();
+  const response = apiFree_getAllAvailableContentObjects();
+  content = JSON.parse(response).data;
   
   // If new day, reset total HP paid counter
   if (cronCount != user.flags.cronCount) {
@@ -1075,7 +1068,7 @@ function apiMult_doHpToRewardAction() {
     messageFixed = NO_HP_FAIL_NOTES;
   }
   else {
-    // Compute roll needed to level up
+    // Roll amount of reward
     var roll = new Array(diceNumber);
     var rollSum = 0;
     
@@ -1092,9 +1085,10 @@ function apiMult_doHpToRewardAction() {
     
     messageFixed += " = **" + rollSum + "** " + abilityStatReward + ". ";
     
+    // Update stat variables
     hp -= hpCost;
     totalHpPaid += hpCost;
-    
+
     switch (abilityStatReward) {
       case "Mana":
         mp += rollSum;
@@ -1112,15 +1106,15 @@ function apiMult_doHpToRewardAction() {
       // Send confirmation PM if enabled
       if (Math.random() < (NOTIFICATION_CHANCE * 4)) {
         const messageRoll = Math.random();
-        
+
         if (messageRoll > 2/3) {
-          api_sendPartyMessage("`" + user.profile.name + message1Start + "`[" + subclassName + "](" + SCRIPT_LINK + ")`" + message1End + rollSum + " " + abilityStatReward + "!`");
+          api_postChatMessageToGroup("party", {"message": "`" + user.profile.name + message1Start + "`[" + subclassName + "](" + SCRIPT_LINK + ")`" + message1End + rollSum + " " + abilityStatReward + "!`"});
         }
         else if (messageRoll > 1/3) {
-          api_sendPartyMessage("`" + user.profile.name + message2Start + "`[" + subclassName + "](" + SCRIPT_LINK + ")`" + message2End + rollSum + " " + abilityStatReward + "!`");
+          api_postChatMessageToGroup("party", {"message": "`" + user.profile.name + message2Start + "`[" + subclassName + "](" + SCRIPT_LINK + ")`" + message2End + rollSum + " " + abilityStatReward + "!`"});
         }
         else {
-          api_sendPartyMessage("`" + user.profile.name + message3Start + "`[" + subclassName + "](" + SCRIPT_LINK + ")`" + message3End + rollSum + " " + abilityStatReward + "!`");
+          api_postChatMessageToGroup("party", {"message": "`" + user.profile.name + message3Start + "`[" + subclassName + "](" + SCRIPT_LINK + ")`" + message3End + rollSum + " " + abilityStatReward + "!`"});
         }
       }
     }
@@ -1139,9 +1133,10 @@ function apiMult_doHpToRewardAction() {
     }
   }
   
-  api_changeTask(UPDATE_MSG_BUTTON_ALIAS, {"notes" : messageFixed + messageVar});
-  api_changeStats(hp, mp, exp, gp);
+  api_updateTask(UPDATE_MSG_BUTTON_ALIAS, {"notes" : messageFixed + messageVar});
+  api_updateUser({"stats.hp" : hp, "stats.mp" : mp, "stats.exp" : exp, "stats.gp" : gp});
 
+  // Save values to non-volatile memory
   scriptProperties.setProperty(cronCountKey, cronCount);
   scriptProperties.setProperty(totalHpPaidKey, totalHpPaid);
 }
@@ -1150,7 +1145,7 @@ function apiMult_doMultiCastAction() {
   var cronCount = Number(scriptProperties.getProperty(cronCountKey));
   var totalUsage = Number(scriptProperties.getProperty(totalUsageKey));
 
-  // If new day, reset total HP paid counter
+  // If new day, reset total usage counter
   if (cronCount != user.flags.cronCount) {
     cronCount = user.flags.cronCount;
     totalUsage = 0;
@@ -1168,12 +1163,12 @@ function apiMult_doMultiCastAction() {
   // If (total usage for the day > totalUsageMax), send max usage reached message via notes
   if (totalUsage >= totalUsageMax) {
     messageFixed = MAX_USAGE_FAIL_NOTES;
-    api_forceSyncOnTaskScore();
+    api_updateUser({"stats.training.con" : user.stats.training.con}); // Used to force sync next time a task is scored. To force sync a stat must be written to. Writing on a usually unused stat value.
   }
   // If present MP < Mana cost, send no MP message via notes
   else if (mp < mpCost) {
     messageFixed = NO_MP_FAIL_NOTES;
-    api_forceSyncOnTaskScore();
+    api_updateUser({"stats.training.con" : user.stats.training.con}); // Used to force sync next time a task is scored. To force sync a stat must be written to. Writing on a usually unused stat value.
   }
   else {
     // Compute roll needed to multicast
@@ -1197,7 +1192,7 @@ function apiMult_doMultiCastAction() {
       }
       
       // Use skill just once
-      api_useSkill(skillId);
+      api_castSkillOnTarget(spellId, "");
     }
     // else send successful roll message via notes and multicast
     else {
@@ -1208,21 +1203,21 @@ function apiMult_doMultiCastAction() {
         const messageRoll = Math.random();
         
         if (messageRoll > 2/3) {
-          api_sendPartyMessage("`" + user.profile.name + message1Start + "`[" + subclassName + "](" + SCRIPT_LINK + ")`" + message1End + "`");
+          api_postChatMessageToGroup("party", {"message": "`" + user.profile.name + message1Start + "`[" + subclassName + "](" + SCRIPT_LINK + ")`" + message1End + "`"});
         }
         else if (messageRoll > 1/3) {
-          api_sendPartyMessage("`" + user.profile.name + message2Start + "`[" + subclassName + "](" + SCRIPT_LINK + ")`" + message2End + "`");
+          api_postChatMessageToGroup("party", {"message": "`" + user.profile.name + message2Start + "`[" + subclassName + "](" + SCRIPT_LINK + ")`" + message2End + "`"});
         }
         else {
-          api_sendPartyMessage("`" + user.profile.name + message3Start + "`[" + subclassName + "](" + SCRIPT_LINK + ")`" + message3End + "`");
+          api_postChatMessageToGroup("party", {"message": "`" + user.profile.name + message3Start + "`[" + subclassName + "](" + SCRIPT_LINK + ")`" + message3End + "`"});
         }
       }
       
       // Give bonus MP then use skill three times
-      api_changeStats(hp, mp + (2 * mpCost), exp, gp);
-      api_useSkill(skillId);
-      api_useSkill(skillId);
-      api_useSkill(skillId);
+      api_updateUser({"stats.hp" : hp, "stats.mp" : mp + (2 * mpCost), "stats.exp" : exp, "stats.gp" : gp});
+      api_castSkillOnTarget(spellId, "");
+      api_castSkillOnTarget(spellId, "");
+      api_castSkillOnTarget(spellId, "");
     }
 
     if (totalUsage >= totalUsageMax) {
@@ -1230,7 +1225,7 @@ function apiMult_doMultiCastAction() {
     }
   }
 
-  api_changeTask(UPDATE_MSG_BUTTON_ALIAS, {"notes" : messageFixed + messageVar});
+  api_updateTask(UPDATE_MSG_BUTTON_ALIAS, {"notes" : messageFixed + messageVar});
 
   scriptProperties.setProperty(cronCountKey, cronCount);
   scriptProperties.setProperty(totalUsageKey, totalUsage);
@@ -1241,7 +1236,8 @@ function apiMult_doHpToRareRewardAction() {
   var totalHpPaid = Number(scriptProperties.getProperty(totalHpPaidKey));
 
   // Get equipment stats info
-  apiFree_getContentInfo();
+  const response = apiFree_getAllAvailableContentObjects();
+  content = JSON.parse(response).data;
   
   // If new day, reset total HP paid counter
   if (cronCount != user.flags.cronCount) {
@@ -1277,6 +1273,7 @@ function apiMult_doHpToRareRewardAction() {
     const roll = Math.floor(Math.random() * diceType) + 1;
     
     messageFixed = "Need to roll ≥ " + rollNeeded + " to level  up.  \n You rolled " + roll + ". ";
+
     hp -= hpCost;
     totalHpPaid += hpCost;
     
@@ -1302,13 +1299,13 @@ function apiMult_doHpToRareRewardAction() {
         const messageRoll = Math.random();
         
         if (messageRoll > 2/3) {
-          api_sendPartyMessage("`" + user.profile.name + message1Start + "`[" + subclassName + "](" + SCRIPT_LINK + ")`" + message1End + "`");
+          api_postChatMessageToGroup("party", {"message": "`" + user.profile.name + message1Start + "`[" + subclassName + "](" + SCRIPT_LINK + ")`" + message1End + "`"});
         }
         else if (messageRoll > 1/3) {
-          api_sendPartyMessage("`" + user.profile.name + message2Start + "`[" + subclassName + "](" + SCRIPT_LINK + ")`" + message2End + "`");
+          api_postChatMessageToGroup("party", {"message": "`" + user.profile.name + message2Start + "`[" + subclassName + "](" + SCRIPT_LINK + ")`" + message2End + "`"});
         }
         else {
-          api_sendPartyMessage("`" + user.profile.name + message3Start + "`[" + subclassName + "](" + SCRIPT_LINK + ")`" + message3End + "`");
+          api_postChatMessageToGroup("party", {"message": "`" + user.profile.name + message3Start + "`[" + subclassName + "](" + SCRIPT_LINK + ")`" + message3End + "`"});
         }
       }
     }
@@ -1318,37 +1315,39 @@ function apiMult_doHpToRareRewardAction() {
     }
   }
   
-  api_changeTask(UPDATE_MSG_BUTTON_ALIAS, {"notes" : messageFixed + messageVar});
-  api_changeStats(hp, mp, exp, gp);
+  api_updateTask(UPDATE_MSG_BUTTON_ALIAS, {"notes" : messageFixed + messageVar});
+  api_updateUser({"stats.hp" : hp, "stats.mp" : mp, "stats.exp" : exp, "stats.gp" : gp});
 
   scriptProperties.setProperty(cronCountKey, cronCount);
   scriptProperties.setProperty(totalHpPaidKey, totalHpPaid);
 }
 
-function apiFree_getContentInfo() {
+function apiFree_getAllAvailableContentObjects() {
   const params = {
     "method" : "get",
     "muteHttpExceptions" : true,
   }
   
   const url = "https://habitica.com/api/v3/content";
-  const response = UrlFetchApp.fetch(url, params);
-  content = JSON.parse(response).data;
-  return response;
+  return UrlFetchApp.fetch(url, params);
 }
 
-function api_useSkill(skillId) {
+function api_castSkillOnTarget(spellId, targetId) {
   const params = {
     "method" : "post",
     "headers" : HEADERS,
     "muteHttpExceptions" : true,
   }
 
-  const url = "https://habitica.com/api/v3/user/class/cast/" + skillId;
+  var url = "https://habitica.com/api/v3/user/class/cast/" + spellId;
+  if (targetId != "") {
+    url += "?targetId=" + targetId;
+  }
+
   return UrlFetchApp.fetch(url, params);
 }
 
-function api_changeTask(idOrAlias, payload) {
+function api_updateTask(taskIdOrAlias, payload) {
   const params = {
     "method" : "put",
     "headers" : HEADERS,
@@ -1357,18 +1356,11 @@ function api_changeTask(idOrAlias, payload) {
     "muteHttpExceptions" : true,
   }
 
-  const url = "https://habitica.com/api/v3/tasks/" + idOrAlias;
+  const url = "https://habitica.com/api/v3/tasks/" + taskIdOrAlias;
   return UrlFetchApp.fetch(url, params);
 }
 
-function api_changeStats(hp, mp, exp, gp) {
-  const payload = {
-    "stats.hp" : hp,
-    "stats.mp" : mp,
-    "stats.exp" : exp,
-    "stats.gp" : gp,
-  }
-  
+function api_updateUser(payload) {
   const params = {
     "method" : "put",
     "headers" : HEADERS,
@@ -1381,28 +1373,7 @@ function api_changeStats(hp, mp, exp, gp) {
   return UrlFetchApp.fetch(url, params);
 }
 
-function api_forceSyncOnTaskScore() {
-  const payload = {
-    "stats.training.con" : 0, // To force sync next time a task is scored, a stat must be written to. Writing on a usually unused stat value.
-  }
-  
-  const params = {
-    "method" : "put",
-    "headers" : HEADERS,
-    "contentType" : "application/json",
-    "payload" : JSON.stringify(payload),
-    "muteHttpExceptions" : true,
-  }
-  
-  const url = "https://habitica.com/api/v3/user";
-  return UrlFetchApp.fetch(url, params);
-}
-
-function api_sendPartyMessage(message) {
-  const payload = {
-    "message" : message,
-  }
-  
+function api_postChatMessageToGroup(groupId, payload) {
   const params = {
     "method" : "post",
     "headers" : HEADERS,
@@ -1410,8 +1381,8 @@ function api_sendPartyMessage(message) {
     "payload" : JSON.stringify(payload),
     "muteHttpExceptions" : true,
   }
-  
-  const url = "https://habitica.com/api/v3/groups/party/chat";
+
+  const url = "https://habitica.com/api/v3/groups/" + groupId + "/chat";
   return UrlFetchApp.fetch(url, params);
 }
 
