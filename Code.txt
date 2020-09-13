@@ -227,7 +227,8 @@ const THE_LOST_CLASSERMASTER_BUTTON_TEXT_ASLEEP = "## **The Lost Classermaster**
 const THE_LOST_CLASSERMASTER_BUTTON_ALIAS = "THE_LOST_CLASSERMASTER_BUTTON_ALIAS";
 const THE_LOST_CLASSERMASTER_BUTTON_NOTES = HEADER_3_PREFIX + WELCOME_MSG;
 
-const ALL_SCRIPT_BUTTONS_ALIASES = [UPDATE_MSG_BUTTON_ALIAS, THE_LOST_CLASSERMASTER_BUTTON_ALIAS, SUBCLASS_WARRIOR_1_ALIAS, SUBCLASS_WARRIOR_2_ALIAS, SUBCLASS_WARRIOR_2_ABILITY_1_ALIAS, SUBCLASS_WARRIOR_2_ABILITY_2_ALIAS, SUBCLASS_WARRIOR_3_ALIAS, SUBCLASS_WARRIOR_4_ALIAS];
+const ALL_SCRIPT_BUTTONS_EXCEPT_UPDATE_MSG_ALIASES = [THE_LOST_CLASSERMASTER_BUTTON_ALIAS].concat(SUBCLASS_BUTTONS_ALIASES);
+const ALL_SCRIPT_BUTTONS_ALIASES = [UPDATE_MSG_BUTTON_ALIAS].concat(ALL_SCRIPT_BUTTONS_EXCEPT_UPDATE_MSG_ALIASES);
 
 var anyTaskCount = Number(scriptProperties.getProperty("anyTaskCount"));
 var state = Number(scriptProperties.getProperty("state"));
@@ -295,7 +296,15 @@ function doPost(e) {
   if ((type == "scored") || ((type == "created") && !ALL_SCRIPT_BUTTONS_ALIASES.includes(task.alias))) {
     anyTaskCount++;
 
-    if ((anyTaskCount >= ANY_TASK_COUNT_MAX) || (task.type == "reward")) {
+    // If Update Msg button clicked twice in a row, force sync
+    if ((task.alias == UPDATE_MSG_BUTTON_ALIAS) && (prevTaskAlias == UPDATE_MSG_BUTTON_ALIAS)) {
+      api_updateUser({"stats.training.con" : 0}); // Used to force sync next time a task is scored. To force sync a stat must be written to. Writing on a usually unused stat value.
+    }
+
+    // If counter reaches limit, or script task (except Update Msg) was scored, or a reward task was created
+    if ((anyTaskCount >= ANY_TASK_COUNT_MAX)
+        || ALL_SCRIPT_BUTTONS_EXCEPT_UPDATE_MSG_ALIASES.includes(task.alias)
+        || ((task.type == "reward") && (type == "created"))) {
       anyTaskCount = 0;
 
       // Get response from repeatable function to see remaining requests
@@ -327,12 +336,7 @@ function doPost(e) {
         scriptProperties.setProperty("state", state);
         scriptProperties.setProperty("lastMsgState", lastMsgState);
         
-        if (task.alias == UPDATE_MSG_BUTTON_ALIAS) {
-          if (prevTaskAlias == UPDATE_MSG_BUTTON_ALIAS) {
-            api_forceSyncOnTaskScore();
-          }
-        }
-        else if ((task.type == "reward") && (state == STATES.SUBCLASS_ACTIVE)) {
+        if ((task.type == "reward") && (state == STATES.SUBCLASS_ACTIVE)) {
           switch (task.alias) {
             case SUBCLASS_WARRIOR_1_ALIAS:
               apiMult_doSubclassWarrior1Action(); // 3 API calls max
