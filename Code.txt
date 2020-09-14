@@ -29,6 +29,7 @@ const scriptProperties = PropertiesService.getScriptProperties(); // Constants c
 
 // Rate Limit Check
 const RETRY_AFTER_OFFSET_MS = 1000;
+const REQUESTS_NEEDED_OFFSET = 1; // Offset to serve as allowance for concurrent requests from other scripts
 
 const FAIL_RETRY_AFTER_WAIT_MSG_PART_1 = "**ERROR: Too many requests. Retry after ";
 const FAIL_RETRY_AFTER_WAIT_MSG_PART_2 = " second(s)**\n\n"
@@ -247,7 +248,7 @@ function doOneTimeSetup() {
   const requestsNeeded = 3;
   
   // If remaining requests not enough, send message now to retry after waiting
-  if (remainingReq < requestsNeeded) {
+  if (remainingReq < (requestsNeeded + REQUESTS_NEEDED_OFFSET)) {
     if (remainingReq >= 1) {
       api_sendPrivateMessage({"message" : FAIL_RETRY_AFTER_WAIT_MSG_PART_1 + retryAfterSec + FAIL_RETRY_AFTER_WAIT_MSG_PART_2, "toUserId" : USER_ID});
     }
@@ -318,7 +319,7 @@ function doPost(e) {
       const requestsNeeded = 6;
       
       // If remaining requests not enough, send message now to retry after waiting
-      if (remainingReq < requestsNeeded) {
+      if (remainingReq < (requestsNeeded + REQUESTS_NEEDED_OFFSET)) {
         if (remainingReq >= 1) {
           api_sendPrivateMessage({"message" : FAIL_RETRY_AFTER_WAIT_MSG_PART_1 + retryAfterSec + FAIL_RETRY_AFTER_WAIT_MSG_PART_2, "toUserId" : USER_ID});
         }
