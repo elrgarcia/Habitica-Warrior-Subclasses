@@ -223,8 +223,8 @@ const LVL_60_ABOVE_MSG_2 = "Here and now I can grant one of these Subclasses to 
 const SUBCLASS_ACTIVE_PRE_MSG = "Excellent choice! From this day onwards you are now a ";
 const SUBCLASS_ACTIVE_MSG = "May your newfound powers aid you in your quest through life. See you again on your next rebirth! ";
 
-const THE_LOST_CLASSERMASTER_BUTTON_TEXT_AWAKE = "## **The Lost Classermaster** ![Old man in warrior's armor, wizard's hat, healer's rod, and rogue's dagger](https://vignette.wikia.nocookie.net/habitrpg/images/6/6c/The_Lost_Classermaster.png/revision/latest?cb=20200827190223 'Hey, no touching!')";
-const THE_LOST_CLASSERMASTER_BUTTON_TEXT_ASLEEP = "## **The Lost Classermaster** ![Old man in warrior's armor, wizard's hat, healer's rod, and rogue's dagger... but now asleep](https://vignette.wikia.nocookie.net/habitrpg/images/1/11/The_Lost_Classermaster_Asleep.png/revision/latest?cb=20200827190259 'Zzzz... that tickles!')";
+const THE_LOST_CLASSERMASTER_BUTTON_TEXT_AWAKE = "## **The Lost Classermaster** ![Old man in warrior's armor, wizard's hat, healer's rod, and rogue's dagger](https://raw.githubusercontent.com/elrgarcia/Habitica-Warrior-Subclasses/master/The%20Lost%20Classermaster.png 'Hey, no touching!')";
+const THE_LOST_CLASSERMASTER_BUTTON_TEXT_ASLEEP = "## **The Lost Classermaster** ![Old man in warrior's armor, wizard's hat, healer's rod, and rogue's dagger... but now asleep](https://raw.githubusercontent.com/elrgarcia/Habitica-Warrior-Subclasses/master/The%20Lost%20Classermaster%20Asleep.png 'Zzzz... that tickles!')";
 const THE_LOST_CLASSERMASTER_BUTTON_ALIAS = "THE_LOST_CLASSERMASTER_BUTTON_ALIAS";
 const THE_LOST_CLASSERMASTER_BUTTON_NOTES = HEADER_3_PREFIX + WELCOME_MSG;
 
