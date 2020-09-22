@@ -293,6 +293,11 @@ function doPost(e) {
   const type = dataContents.type;
   const task = dataContents.task;
 
+  // Sanitize task alias
+  if ((task.alias == undefined) || (task.alias == null)) {
+    task.alias = "";
+  }
+
   // If any task was scored, or a non-script task was created
   if ((type == "scored") || ((type == "created") && !ALL_SCRIPT_BUTTONS_ALIASES.includes(task.alias))) {
     anyTaskCount++;
